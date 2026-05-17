@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import get_session_factory
 from app.models.run import Run, RunStatus
+from app.services.memory_mirror import sync_user as _memory_mirror_sync_impl
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,13 @@ def _graph_factory(**kwargs):
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
     return TradingAgentsGraph(**kwargs)
+
+
+async def _memory_mirror_sync(session, *, dashboard_dir, user_id):
+    """Indirection so tests can patch the mirror behavior."""
+    return await _memory_mirror_sync_impl(
+        session, dashboard_dir=dashboard_dir, user_id=user_id
+    )
 
 
 def _session_factory_for_worker():
@@ -211,6 +219,24 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
             )
         )
         await session.commit()
+
+    # Third transaction: refresh the portfolio mirror for this user. Failures
+    # here are non-fatal — the run is already marked complete and the user can
+    # still browse it; portfolio will catch up on the next per-request sync.
+    if error_summary is None:
+        try:
+            async with session_factory() as session:
+                run_for_mirror = (
+                    await session.execute(select(Run).where(Run.id == run_id))
+                ).scalar_one_or_none()
+                if run_for_mirror is not None:
+                    await _memory_mirror_sync(
+                        session,
+                        dashboard_dir=settings.dashboard_data_dir,
+                        user_id=run_for_mirror.user_id,
+                    )
+        except Exception:  # noqa: BLE001
+            logger.exception("memory_mirror sync failed for run_id=%s", run_id)
 
 
 async def orphan_sweeper(ctx: dict) -> None:

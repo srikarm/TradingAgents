@@ -4,17 +4,22 @@ import RatingBadge from "./RatingBadge";
 
 export default function RunCard({ run }: { run: RunOut }) {
   return (
-    <Link href={`/history/${run.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-      <div style={{
-        border: "1px solid #e5e7eb", borderRadius: 8, padding: 16,
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
-        <div>
-          <div style={{ fontWeight: 600 }}>{run.ticker}</div>
-          <div style={{ fontSize: 12, color: "#6b7280" }}>{run.trade_date}</div>
-        </div>
+    <div style={{
+      border: "1px solid #e5e7eb", borderRadius: 8, padding: 16,
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+    }}>
+      <Link href={`/history/${run.id}`}
+            style={{ textDecoration: "none", color: "inherit", flex: 1 }}>
+        <div style={{ fontWeight: 600 }}>{run.ticker}</div>
+        <div style={{ fontSize: 12, color: "#6b7280" }}>{run.trade_date}</div>
+      </Link>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <RatingBadge rating={run.final_rating} />
+        <Link href={`/portfolio/${run.ticker}`}
+              style={{ fontSize: 12, color: "#6b7280" }}>
+          View ticker
+        </Link>
       </div>
-    </Link>
+    </div>
   );
 }

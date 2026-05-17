@@ -1,10 +1,13 @@
 import { SignJWT } from "jose";
 import { auth } from "@/lib/auth";
 import type {
+  PortfolioCurveOut,
+  PortfolioSummaryOut,
   RunCreate,
   RunDetailOut,
   RunListOut,
   RunTailOut,
+  TickerDetailOut,
   UserOut,
 } from "@/lib/types";
 
@@ -81,4 +84,8 @@ export const api = {
   createRun: (body: RunCreate) => post<{ run_id: string }>("/runs", body),
   tailRun: (id: string, since: number) =>
     get<RunTailOut>(`/runs/${id}/tail?since=${since}`),
+  portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
+  portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),
+  portfolioTicker: (ticker: string) =>
+    get<TickerDetailOut>(`/portfolio/ticker/${encodeURIComponent(ticker)}`),
 };

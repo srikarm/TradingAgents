@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     default_max_debate_rounds: int = 1
     default_max_risk_discuss_rounds: int = 1
 
+    # Wave 3
+    price_cache_ttl_seconds: int = 86_400  # 24h
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

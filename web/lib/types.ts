@@ -51,3 +51,43 @@ export interface RunTailOut {
   next_offset: number;
   status: RunStatus;
 }
+
+// --- Wave 3: portfolio ---
+
+export type MemoryEntryStatus = "pending" | "resolved";
+
+export interface PortfolioSummaryOut {
+  trade_count: number;
+  win_rate: number;
+  sharpe: number;
+  max_drawdown: number;
+  /** Sum of per-decision P&L; same units as PnLPoint.cumulative_pnl. */
+  cumulative_pnl: number;
+}
+
+export interface PnLPoint {
+  trade_date: string;
+  cumulative_pnl: number;
+}
+
+export interface PortfolioCurveOut {
+  points: PnLPoint[];
+}
+
+export interface PricePoint {
+  trade_date: string;
+  close: number;
+}
+
+export interface DecisionPin {
+  trade_date: string;
+  rating: string;
+  status: MemoryEntryStatus;
+  raw_return: number | null;
+}
+
+export interface TickerDetailOut {
+  ticker: string;
+  prices: PricePoint[];
+  decisions: DecisionPin[];
+}
