@@ -9,6 +9,7 @@ All filesystem access goes through user_root.
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -23,6 +24,8 @@ from app.services.user_root import (
     _check_segment,
     user_results_dir,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PriceFetchError(RuntimeError):
@@ -102,5 +105,7 @@ async def fetch_prices(
     try:
         path.write_text(json.dumps(points), encoding="utf-8")
     except OSError:
-        pass  # cache-write failure is non-fatal
+        # Non-fatal: caller still gets the freshly-fetched data, but operators
+        # need to know the cache directory is broken (disk full, perms, NFS).
+        logger.warning("price_cache: failed to write cache %s", path, exc_info=True)
     return points

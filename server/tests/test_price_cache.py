@@ -85,3 +85,38 @@ async def test_fetch_prices_rejects_bad_ticker(tmp_path):
             tmp_path, user_id=uid, ticker="../etc/passwd",
             start="2024-05-09", end="2024-05-10",
         )
+
+
+@pytest.mark.asyncio
+async def test_fetch_prices_isolates_users(tmp_path, monkeypatch):
+    """Two users requesting the same ticker+range must hit distinct cache
+    paths under their own user_root, so one user's cache cannot poison another.
+    """
+    uid_a = uuid.uuid4()
+    uid_b = uuid.uuid4()
+
+    call_log: list[tuple] = []
+
+    def fake_yf(symbol, start, end):
+        call_log.append((symbol, start, end))
+        return _fake_df([("2024-05-09", 100.0)])
+
+    monkeypatch.setattr(price_cache, "_yf_history", fake_yf)
+
+    await fetch_prices(
+        tmp_path, user_id=uid_a, ticker="NVDA",
+        start="2024-05-09", end="2024-05-09",
+    )
+    # Second user with same args must hit yfinance again — caches are per-user.
+    await fetch_prices(
+        tmp_path, user_id=uid_b, ticker="NVDA",
+        start="2024-05-09", end="2024-05-09",
+    )
+    assert len(call_log) == 2
+
+    # And the cache files live at different paths under each user's namespace
+    cache_a = tmp_path / "users" / str(uid_a) / "cache" / "prices" / "NVDA_2024-05-09_2024-05-09.json"
+    cache_b = tmp_path / "users" / str(uid_b) / "cache" / "prices" / "NVDA_2024-05-09_2024-05-09.json"
+    assert cache_a.is_file()
+    assert cache_b.is_file()
+    assert cache_a != cache_b

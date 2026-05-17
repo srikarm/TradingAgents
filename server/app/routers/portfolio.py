@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -21,6 +23,8 @@ from app.schemas.portfolio import (
 )
 from app.services import memory_mirror, portfolio_calc, price_cache
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 
@@ -34,6 +38,32 @@ async def _sync_user(session, *, dashboard_dir, user_id):
     return await memory_mirror.sync_user(
         session, dashboard_dir=dashboard_dir, user_id=user_id
     )
+
+
+async def _sync_user_safe(db: AsyncSession, dashboard_dir, user_id) -> None:
+    """Run the per-request mirror sync, logging + rolling back on DB failure.
+
+    Mirror failure is non-fatal — the user still gets whatever's already in
+    Postgres. If sync_user raises a SQLAlchemyError mid-loop, the session is
+    left in an aborted-transaction state and the subsequent _load_entries()
+    call would also fail unexpectedly; rollback resets it. Non-DB exceptions
+    don't affect session state, so we just log them and continue.
+    """
+    try:
+        await _sync_user(db, dashboard_dir=dashboard_dir, user_id=user_id)
+    except SQLAlchemyError:
+        logger.warning(
+            "portfolio mirror sync failed (DB error) for user_id=%s",
+            user_id, exc_info=True,
+        )
+        try:
+            await db.rollback()
+        except Exception:  # noqa: BLE001
+            logger.exception("rollback after sync failure also failed")
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "portfolio mirror sync failed for user_id=%s", user_id, exc_info=True
+        )
 
 
 async def _load_entries(session: AsyncSession, user_id) -> list[dict]:
@@ -63,10 +93,7 @@ async def get_summary(
     db: AsyncSession = Depends(get_db),
 ) -> PortfolioSummaryOut:
     settings = get_settings()
-    try:
-        await _sync_user(db, dashboard_dir=settings.dashboard_data_dir, user_id=user.id)
-    except Exception:  # noqa: BLE001
-        pass  # mirror failure is non-fatal; read whatever's there
+    await _sync_user_safe(db, settings.dashboard_data_dir, user.id)
     entries = await _load_entries(db, user.id)
     return PortfolioSummaryOut(**portfolio_calc.summary(entries))
 
@@ -77,10 +104,7 @@ async def get_curve(
     db: AsyncSession = Depends(get_db),
 ) -> PortfolioCurveOut:
     settings = get_settings()
-    try:
-        await _sync_user(db, dashboard_dir=settings.dashboard_data_dir, user_id=user.id)
-    except Exception:  # noqa: BLE001
-        pass
+    await _sync_user_safe(db, settings.dashboard_data_dir, user.id)
     entries = await _load_entries(db, user.id)
     pts = portfolio_calc.cumulative_curve(entries)
     return PortfolioCurveOut(points=[PnLPoint(**p) for p in pts])
@@ -93,10 +117,7 @@ async def get_ticker_detail(
     db: AsyncSession = Depends(get_db),
 ) -> TickerDetailOut:
     settings = get_settings()
-    try:
-        await _sync_user(db, dashboard_dir=settings.dashboard_data_dir, user_id=user.id)
-    except Exception:  # noqa: BLE001
-        pass
+    await _sync_user_safe(db, settings.dashboard_data_dir, user.id)
 
     rows = (
         await db.execute(
@@ -136,6 +157,10 @@ async def get_ticker_detail(
         # fails. Return 200 with empty prices so the user keeps their decision
         # history — the frontend renders a placeholder banner where the chart
         # would be.
+        logger.warning(
+            "yfinance fetch failed for user_id=%s ticker=%s; returning decisions only",
+            user.id, ticker, exc_info=True,
+        )
         price_points = []
 
     return TickerDetailOut(

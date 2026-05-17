@@ -11,6 +11,7 @@ next sync (worker post-run, or fallback per-request from the portfolio router).
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory_entry import MemoryEntry, MemoryEntryStatus
 from app.services.user_root import user_results_dir
+
+logger = logging.getLogger(__name__)
 
 
 def _pct_to_float(s: str | None) -> float | None:
@@ -84,12 +87,14 @@ async def sync_user(
 
     now = datetime.now(timezone.utc)
     processed = 0
+    skipped = 0
 
     for entry in parsed:
         ticker = entry.get("ticker")
         trade_date = entry.get("date")
         rating = entry.get("rating")
         if not (ticker and trade_date and rating):
+            skipped += 1
             continue
 
         existing = (
@@ -139,4 +144,10 @@ async def sync_user(
         processed += 1
 
     await session.commit()
+    if skipped:
+        logger.warning(
+            "memory_mirror: skipped %d of %d entries (missing ticker/date/rating)"
+            " for user_id=%s",
+            skipped, len(parsed), user_id,
+        )
     return processed

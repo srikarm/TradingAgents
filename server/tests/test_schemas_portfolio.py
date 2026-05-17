@@ -41,7 +41,7 @@ def test_portfolio_summary_shape():
         win_rate=0.667,
         sharpe=1.23,
         max_drawdown=-0.05,
-        cumulative_return=0.04,
+        cumulative_pnl=0.04,
     )
     assert s.trade_count == 3
     assert s.win_rate == pytest.approx(0.667)

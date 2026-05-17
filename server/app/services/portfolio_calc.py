@@ -111,5 +111,5 @@ def summary(entries: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "win_rate": win_rate(entries_list),
         "sharpe": sharpe_ratio(entries_list),
         "max_drawdown": max_drawdown(entries_list),
-        "cumulative_return": pts[-1]["cumulative_pnl"] if pts else 0.0,
+        "cumulative_pnl": pts[-1]["cumulative_pnl"] if pts else 0.0,
     }

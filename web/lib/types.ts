@@ -61,7 +61,8 @@ export interface PortfolioSummaryOut {
   win_rate: number;
   sharpe: number;
   max_drawdown: number;
-  cumulative_return: number;
+  /** Sum of per-decision P&L; same units as PnLPoint.cumulative_pnl. */
+  cumulative_pnl: number;
 }
 
 export interface PnLPoint {

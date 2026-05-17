@@ -128,7 +128,7 @@ def test_summary_aggregates_all_metrics():
     ]
     s = summary(entries)
     assert s["trade_count"] == 3
-    assert s["cumulative_return"] == pytest.approx(0.04)
+    assert s["cumulative_pnl"] == pytest.approx(0.04)
     assert s["win_rate"] == pytest.approx(2 / 3)
     assert s["max_drawdown"] == pytest.approx(-0.01)
 
@@ -140,5 +140,5 @@ def test_summary_empty():
         "win_rate": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "cumulative_return": 0.0,
+        "cumulative_pnl": 0.0,
     }

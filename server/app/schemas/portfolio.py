@@ -27,7 +27,9 @@ class PortfolioSummaryOut(BaseModel):
     win_rate: float
     sharpe: float
     max_drawdown: float
-    cumulative_return: float
+    # Sum of per-decision P&L (same units as PnLPoint.cumulative_pnl);
+    # not annualized; not a return percentage despite how the UI renders it.
+    cumulative_pnl: float
 
 
 class PortfolioCurveOut(BaseModel):

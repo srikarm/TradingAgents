@@ -23,7 +23,7 @@ export default function PortfolioStats({ summary }: { summary: PortfolioSummaryO
     <div style={{
       display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24,
     }}>
-      <Card label="Cumulative P&L" value={pct(summary.cumulative_return)} />
+      <Card label="Cumulative P&L" value={pct(summary.cumulative_pnl)} />
       <Card label="Win rate" value={pct(summary.win_rate)} />
       <Card label="Sharpe (per-decision)" value={summary.sharpe.toFixed(2)} />
       <Card label="Max drawdown" value={pct(summary.max_drawdown)} />

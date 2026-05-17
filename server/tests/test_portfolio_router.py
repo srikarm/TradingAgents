@@ -70,7 +70,7 @@ async def test_summary_aggregates_only_current_user(client, db_session):
     assert r.status_code == 200
     body = r.json()
     assert body["trade_count"] == 2
-    assert body["cumulative_return"] == pytest.approx(0.01)
+    assert body["cumulative_pnl"] == pytest.approx(0.01)
     assert body["win_rate"] == pytest.approx(0.5)
 
 
@@ -97,7 +97,7 @@ async def test_summary_empty_returns_zeros(client, db_session):
         "win_rate": 0.0,
         "sharpe": 0.0,
         "max_drawdown": 0.0,
-        "cumulative_return": 0.0,
+        "cumulative_pnl": 0.0,
     }
 
 
@@ -252,3 +252,48 @@ async def test_ticker_detail_rejects_bad_ticker_format(client, db_session):
             headers={"Authorization": f"Bearer {make_jwt('gh-tx')}"},
         )
     assert r.status_code in (404, 422)
+
+
+# --- Tests that exercise the real _sync_user code path (no noop patch) ---
+
+
+@pytest.fixture
+def client_with_sync(db_session):
+    """Same as `client` but does NOT patch _sync_user — used to verify the
+    bare-except mask in _sync_user_safe actually swallows what it claims to."""
+
+    async def _override_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_db
+    yield AsyncClient(transport=ASGITransport(app=app), base_url="http://t")
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_summary_returns_existing_data_when_sync_raises(
+    client_with_sync, db_session, monkeypatch
+):
+    """If _sync_user raises (e.g., concurrent IntegrityError), the router must
+    still return whatever's already in Postgres — not a 500. _sync_user_safe
+    catches the exception and rolls back so _load_entries proceeds normally."""
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-sf"))
+    _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-10",
+               rating="Buy", raw=0.03)
+    await db_session.flush()
+
+    async def boom(session, *, dashboard_dir, user_id):
+        raise RuntimeError("sync exploded mid-loop")
+
+    monkeypatch.setattr(portfolio_router, "_sync_user", boom)
+
+    async with client_with_sync as c:
+        r = await c.get(
+            "/portfolio/summary",
+            headers={"Authorization": f"Bearer {make_jwt('gh-sf')}"},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["trade_count"] == 1
+    assert body["cumulative_pnl"] == pytest.approx(0.03)
