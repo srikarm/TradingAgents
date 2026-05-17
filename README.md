@@ -274,3 +274,28 @@ Please reference our work if you find *TradingAgents* provides you with some hel
       url={https://arxiv.org/abs/2412.20138}, 
 }
 ```
+
+## Dashboard (Wave 1)
+
+A web dashboard for browsing TradingAgents runs lives under `server/`
+(FastAPI) and `web/` (Next.js). See `docs/superpowers/specs/2026-05-17-trading-dashboard-design.md`
+for design and `docs/superpowers/plans/2026-05-17-trading-dashboard-wave-1.md`
+for the Wave 1 implementation plan.
+
+Quick start:
+
+```bash
+cp server/.env.example server/.env
+cp web/.env.example web/.env
+# Fill in NEXTAUTH_SECRET (same value in both files) and GitHub OAuth creds.
+docker compose up --build
+
+# Optional: import existing CLI runs
+docker compose exec api uv run python -m app.scripts.import_runs \
+    --github-id <your-github-numeric-id> \
+    --legacy-dir /host/path/to/.tradingagents/logs \
+    --dashboard-dir /data
+```
+
+Read-only browsing only in Wave 1. Run launching, live monitoring, and
+portfolio analytics arrive in Waves 2 and 3.
