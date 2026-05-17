@@ -1,22 +1,27 @@
-# Unified image for the dashboard API + arq worker.
-# Build context is the repo root so we can install both the root
-# `tradingagents` package and the `server` app into the same image.
+FROM python:3.12-slim AS builder
 
-FROM python:3.12-slim AS base
-ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
-WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install uv
-RUN pip install --no-cache-dir uv
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy the root tradingagents package (needed by the worker)
-COPY pyproject.toml requirements.txt ./
-COPY tradingagents ./tradingagents
+WORKDIR /build
+COPY . .
+RUN pip install --no-cache-dir .
 
-# Copy the server app and sync its deps (which include path-dep on ..)
-COPY server ./server
-WORKDIR /app/server
-RUN uv sync --no-dev
+FROM python:3.12-slim
 
-EXPOSE 8000
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN useradd --create-home appuser
+USER appuser
+WORKDIR /home/appuser/app
+
+COPY --from=builder --chown=appuser:appuser /build .
+
+ENTRYPOINT ["tradingagents"]

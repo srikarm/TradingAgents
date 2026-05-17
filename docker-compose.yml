@@ -18,7 +18,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: server/Dockerfile
     working_dir: /app/server
     environment:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
