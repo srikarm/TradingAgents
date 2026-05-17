@@ -210,9 +210,13 @@ async def test_ticker_detail_isolates_users(client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_ticker_detail_returns_502_on_yfinance_failure(
+async def test_ticker_detail_returns_decisions_when_yfinance_fails(
     client, db_session, monkeypatch
 ):
+    """Per spec §6: when yfinance fails, the UI must still show the decision
+    list. We return 200 with empty `prices` so the frontend can render the
+    decision timeline; reserving 502 would block all user data on a flaky
+    upstream call."""
     uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-tf"))
     _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-10",
@@ -229,9 +233,12 @@ async def test_ticker_detail_returns_502_on_yfinance_failure(
             "/portfolio/ticker/NVDA",
             headers={"Authorization": f"Bearer {make_jwt('gh-tf')}"},
         )
-    assert r.status_code == 502
-    assert r.json()["detail"]["error"] == "price_data_unavailable"
-    assert r.json()["detail"]["ticker"] == "NVDA"
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticker"] == "NVDA"
+    assert body["prices"] == []
+    assert len(body["decisions"]) == 1
+    assert body["decisions"][0]["rating"] == "Buy"
 
 
 @pytest.mark.asyncio

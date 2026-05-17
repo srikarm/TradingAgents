@@ -83,11 +83,16 @@ def sharpe_ratio(entries: Iterable[dict[str, Any]]) -> float:
 
 
 def max_drawdown(entries: Iterable[dict[str, Any]]) -> float:
-    """Return the most negative (cumulative - running_max). Always <= 0."""
+    """Return the most negative (cumulative - running_max). Always <= 0.
+
+    Peak is initialized to 0.0 (capital-deployed baseline) so a losing first
+    trade counts as a drawdown from zero. Initializing peak to pts[0] would
+    silently report 0% drawdown when the first trade went immediately negative.
+    """
     pts = cumulative_curve(entries)
     if not pts:
         return 0.0
-    peak = pts[0]["cumulative_pnl"]
+    peak = 0.0
     dd = 0.0
     for p in pts:
         if p["cumulative_pnl"] > peak:

@@ -109,6 +109,17 @@ def test_max_drawdown_empty_is_zero():
     assert max_drawdown([]) == 0.0
 
 
+def test_max_drawdown_first_trade_is_loser():
+    """Regression: if the very first trade loses money, peak starts at 0.0
+    (not at pts[0]), so the loss counts. Previously a losing-first-trade
+    portfolio would silently report 0% drawdown."""
+    entries = [
+        _entry("2024-05-10", "Buy", -0.05),  # cumulative starts at -0.05
+        _entry("2024-05-11", "Buy", 0.02),   # cumulative climbs to -0.03
+    ]
+    assert max_drawdown(entries) == pytest.approx(-0.05)
+
+
 def test_summary_aggregates_all_metrics():
     entries = [
         _entry("2024-05-10", "Buy", 0.02),

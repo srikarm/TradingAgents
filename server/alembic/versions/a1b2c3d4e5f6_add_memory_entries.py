@@ -72,4 +72,8 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_memory_entries_ticker'), table_name='memory_entries')
     op.drop_index(op.f('ix_memory_entries_user_id'), table_name='memory_entries')
     op.drop_table('memory_entries')
+    # DROP TABLE does not cascade to user-defined enum types on Postgres.
+    # Without this, downgrade then upgrade-to-this-revision fails on Postgres
+    # with "type memory_entry_status already exists". SQLite ignores the call.
+    op.execute("DROP TYPE IF EXISTS memory_entry_status")
     # ### end Alembic commands ###

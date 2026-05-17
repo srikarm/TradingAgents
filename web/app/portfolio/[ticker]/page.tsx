@@ -19,11 +19,7 @@ export default async function TickerPage({
     detail = await api.portfolioTicker(ticker);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
-    if (e instanceof ApiError && e.status === 502) {
-      detail = { ticker, prices: [], decisions: [] };
-    } else {
-      throw e;
-    }
+    throw e;
   }
   return (
     <>

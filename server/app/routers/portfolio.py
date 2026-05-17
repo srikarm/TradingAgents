@@ -132,10 +132,11 @@ async def get_ticker_detail(
             end=end,
         )
     except price_cache.PriceFetchError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"error": "price_data_unavailable", "ticker": ticker},
-        )
+        # Spec §6: UI shows decision list without price overlay when yfinance
+        # fails. Return 200 with empty prices so the user keeps their decision
+        # history — the frontend renders a placeholder banner where the chart
+        # would be.
+        price_points = []
 
     return TickerDetailOut(
         ticker=ticker,
