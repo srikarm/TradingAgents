@@ -216,7 +216,7 @@ async def pg_engine(pg_container):
 
 - Marker `pg` is registered in `pyproject.toml` and skipped by default. Opt-in: `pytest -m pg`.
 - Local dev runs `pytest` as today (SQLite only) → no behavioral change for contributors without Docker.
-- CI gets a new `pg` job that runs `pytest -m pg` on every push.
+- The repo has **no CI workflows** today (no `.github/workflows/`). Wiring `pytest -m pg` into a CI job is left for whenever CI is established — that's a separate, project-wide concern. Until then, the contract is: anyone touching `memory_mirror.py` is expected to run `pytest -m pg` locally before opening a PR. This is documented in the plan and reinforced by a sentence added to the top of `memory_mirror.py`.
 
 ### 5.5 Dependencies
 
@@ -233,9 +233,8 @@ async def pg_engine(pg_container):
 | `server/tests/conftest_pg.py` | NEW. Testcontainer fixture. |
 | `server/tests/test_memory_mirror_concurrent_pg.py` | NEW. Concurrent skip + no-duplicate test (+ optional invocation smoke test). |
 | `server/pyproject.toml` | Add `testcontainers[postgres]` dev dep; register `pg` pytest marker. |
-| `.github/workflows/*` | Add (or extend) a CI job that runs `pytest -m pg`. |
 
-No Alembic migration. No production dependency changes. No frontend changes. No spec changes elsewhere — this implements §6.
+No CI changes (the repo has no CI workflows yet). No Alembic migration. No production dependency changes. No frontend changes. No spec changes elsewhere — this implements §6.
 
 ---
 
@@ -257,9 +256,8 @@ The implementation is done when all of the following are true:
 
 1. `cd server && uv run pytest` (SQLite default) — all 133+ existing tests pass.
 2. `cd server && uv run pytest -m pg` — new concurrent test passes; asserts one of two concurrent `sync_user(...)` returns N, the other returns 0, warning is logged, no duplicate rows.
-3. CI's new `pg` job is green.
-4. Manual code review confirms `_try_acquire` is called before any `SELECT` / `INSERT` in `sync_user`.
-5. No diff in `server/app/workers/tasks.py` or `server/app/routers/portfolio.py` — caller behavior is genuinely unchanged.
+3. Manual code review confirms `_try_acquire` is called before any `SELECT` / `INSERT` in `sync_user`.
+4. No diff in `server/app/workers/tasks.py` or `server/app/routers/portfolio.py` — caller behavior is genuinely unchanged.
 
 ---
 
