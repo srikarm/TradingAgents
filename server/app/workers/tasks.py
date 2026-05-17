@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select, update
@@ -140,3 +140,26 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
             )
         )
         await session.commit()
+
+
+async def orphan_sweeper(ctx: dict) -> None:
+    """Cron: mark `running` rows whose heartbeat is older than threshold as failed."""
+    settings = get_settings()
+    threshold = datetime.now(timezone.utc) - timedelta(
+        seconds=settings.orphan_threshold_seconds
+    )
+    async with _session_factory_for_worker() as session:
+        result = await session.execute(
+            update(Run)
+            .where(
+                Run.status == RunStatus.RUNNING,
+                Run.last_heartbeat_at < threshold,
+            )
+            .values(
+                status=RunStatus.FAILED,
+                error_summary="worker_lost",
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+        logger.info("orphan_sweeper: marked %d run(s) failed", result.rowcount)
