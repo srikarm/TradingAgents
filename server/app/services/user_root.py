@@ -53,6 +53,6 @@ def user_report_file(
     """Return the path to a specific report markdown file under reports/."""
     if not isinstance(filename, str) or "/" in filename or "\\" in filename or "\0" in filename:
         raise PathEscapeError(f"invalid filename: {filename!r}")
-    if not filename.endswith(".md"):
+    if not filename.endswith(".md") or len(filename) <= 3:
         raise PathEscapeError(f"only .md filenames allowed: {filename!r}")
     return user_run_dir(root, user_id, ticker, trade_date) / "reports" / filename

@@ -6,6 +6,7 @@ import pytest
 from app.services.user_root import (
     InvalidUserIdError,
     PathEscapeError,
+    user_report_file,
     user_results_dir,
     user_run_dir,
 )
@@ -72,3 +73,36 @@ def test_resolved_path_must_be_inside_root(root: Path):
     p = user_run_dir(root, GOOD, "NVDA", "2024-05-10")
     p.mkdir(parents=True)
     assert root.resolve() in p.resolve().parents
+
+
+def test_user_report_file_happy_path(root: Path):
+    p = user_report_file(root, GOOD, "NVDA", "2024-05-10", "market.md")
+    assert p == root / "users" / GOOD / "NVDA" / "2024-05-10" / "reports" / "market.md"
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "../escape.md",         # slash
+        "sub/dir.md",            # slash
+        "win\\path.md",          # backslash
+        "with\0nul.md",          # nul byte
+        "report.txt",            # wrong extension
+        "report",                # no extension
+        "",                      # empty
+        ".md",                   # only extension
+    ],
+)
+def test_user_report_file_rejects_bad_filename(root: Path, filename: str):
+    with pytest.raises(PathEscapeError):
+        user_report_file(root, GOOD, "NVDA", "2024-05-10", filename)
+
+
+def test_user_report_file_inherits_user_id_validation(root: Path):
+    with pytest.raises(InvalidUserIdError):
+        user_report_file(root, "not-a-uuid", "NVDA", "2024-05-10", "market.md")
+
+
+def test_user_report_file_inherits_ticker_validation(root: Path):
+    with pytest.raises(PathEscapeError):
+        user_report_file(root, GOOD, "../bad", "2024-05-10", "market.md")
