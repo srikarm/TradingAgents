@@ -1,6 +1,12 @@
 import { SignJWT } from "jose";
 import { auth } from "@/lib/auth";
-import type { RunDetailOut, RunListOut, UserOut } from "@/lib/types";
+import type {
+  RunCreate,
+  RunDetailOut,
+  RunListOut,
+  RunTailOut,
+  UserOut,
+} from "@/lib/types";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
 
@@ -24,8 +30,23 @@ async function get<T>(path: string): Promise<T> {
     headers: { Authorization: await bearer() },
     cache: "no-store",
   });
+  if (!res.ok) throw new Error(`api ${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: await bearer(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
   if (!res.ok) {
-    throw new Error(`api ${path} failed: ${res.status}`);
+    const detail = await res.text();
+    throw new Error(`api ${path} failed: ${res.status} ${detail}`);
   }
   return res.json() as Promise<T>;
 }
@@ -35,4 +56,7 @@ export const api = {
   listRuns: (ticker?: string) =>
     get<RunListOut>(ticker ? `/runs?ticker=${encodeURIComponent(ticker)}` : "/runs"),
   getRun: (id: string) => get<RunDetailOut>(`/runs/${id}`),
+  createRun: (body: RunCreate) => post<{ run_id: string }>("/runs", body),
+  tailRun: (id: string, since: number) =>
+    get<RunTailOut>(`/runs/${id}/tail?since=${since}`),
 };
