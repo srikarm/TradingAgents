@@ -3529,7 +3529,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.7" },
-    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" },
+    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.8,<5" },
 ]
 
 [[package]]

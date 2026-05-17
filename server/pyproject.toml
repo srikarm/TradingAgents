@@ -25,7 +25,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "anyio>=4.6",
     "ruff>=0.7",
-    "testcontainers[postgres]>=4.8",
+    "testcontainers[postgres]>=4.8,<5",
 ]
 
 [tool.pytest.ini_options]
