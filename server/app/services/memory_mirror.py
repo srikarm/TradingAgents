@@ -107,8 +107,23 @@ async def sync_user(
             )
         ).scalar_one_or_none()
 
-        status = MemoryEntryStatus.PENDING if entry.get("pending") else MemoryEntryStatus.RESOLVED
+        status = (
+            MemoryEntryStatus.PENDING if entry.get("pending")
+            else MemoryEntryStatus.RESOLVED
+        )
         raw = _pct_to_float(entry.get("raw"))
+        # Spec §6: enforce the (RESOLVED ⟹ raw_return NOT NULL) invariant
+        # at the write boundary. If the disk says resolved but the raw
+        # value couldn't be parsed, demote to PENDING — the row remains
+        # useful (rating, decision text) and the warning surfaces the
+        # underlying disk format issue for the operator to fix.
+        if status is MemoryEntryStatus.RESOLVED and raw is None:
+            logger.warning(
+                "memory_mirror: demoting %s/%s to PENDING for user_id=%s — "
+                "disk says resolved but raw_return is missing/malformed",
+                ticker, trade_date, user_id,
+            )
+            status = MemoryEntryStatus.PENDING
         alpha = _pct_to_float(entry.get("alpha"))
         holding = _holding_to_int(entry.get("holding"))
         decision = entry.get("decision") or None

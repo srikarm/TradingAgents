@@ -1,3 +1,4 @@
+import logging
 import uuid
 from pathlib import Path
 
@@ -102,3 +103,47 @@ async def test_sync_user_no_file_is_noop(db_session, tmp_path):
     await db_session.flush()
     count = await sync_user(db_session, dashboard_dir=tmp_path, user_id=uid)
     assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_demotes_resolved_with_unparseable_raw(
+    db_session, tmp_path, caplog,
+):
+    """Per spec §6: a non-pending entry with unparseable raw must be
+    demoted to PENDING (with a warning log) instead of attempting to
+    insert a status=RESOLVED, raw_return=NULL row (which the CHECK
+    constraint would reject)."""
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-demote"))
+    await db_session.flush()
+
+    fixture = (
+        Path(__file__).parent / "fixtures"
+        / "trading_memory_resolved_unparseable.md"
+    )
+    mem_dir = tmp_path / "users" / str(uid) / "memory"
+    mem_dir.mkdir(parents=True)
+    (mem_dir / "trading_memory.md").write_text(fixture.read_text(encoding="utf-8"))
+
+    caplog.set_level(logging.WARNING, logger="app.services.memory_mirror")
+    count = await sync_user(db_session, dashboard_dir=tmp_path, user_id=uid)
+
+    assert count == 1
+    row = (
+        await db_session.execute(
+            select(MemoryEntry).where(MemoryEntry.user_id == uid)
+        )
+    ).scalar_one()
+    assert row.status is MemoryEntryStatus.PENDING
+    assert row.raw_return is None
+    assert row.rating == "Buy"  # rating preserved despite demote
+
+    demote_warnings = [
+        r for r in caplog.records
+        if r.levelno == logging.WARNING and "demoting" in r.message
+        and "NVDA" in r.message and "2024-05-12" in r.message
+    ]
+    assert len(demote_warnings) == 1, (
+        f"expected exactly one demote WARNING; got: "
+        f"{[r.message for r in caplog.records]}"
+    )
