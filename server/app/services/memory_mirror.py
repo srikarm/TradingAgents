@@ -11,18 +11,51 @@ next sync (worker post-run, or fallback per-request from the portfolio router).
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import struct
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory_entry import MemoryEntry, MemoryEntryStatus
 from app.services.user_root import user_results_dir
 
 logger = logging.getLogger(__name__)
+
+# Postgres advisory-lock namespace for memory_mirror.sync_user races.
+# Two-key form: (NAMESPACE, signed_int32_from_user_uuid). Greppable in
+# pg_locks as classid=0x4D4D5252 ("MMRR"). See spec §3.
+_LOCK_NAMESPACE = 0x4D4D5252
+
+
+def _user_key(user_id: uuid.UUID) -> int:
+    """Map a user UUID to a signed int32 advisory-lock key (deterministic)."""
+    # Python's built-in hash() is randomized per-process; BLAKE2 is
+    # deterministic — required so two workers compute the same key.
+    digest = hashlib.blake2b(user_id.bytes, digest_size=4).digest()
+    return struct.unpack(">i", digest)[0]
+
+
+async def _try_acquire(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Try to acquire the per-user advisory lock for this transaction.
+
+    Returns True on Postgres if the lock is acquired (or always True on
+    non-Postgres dialects — the lock is a no-op for SQLite test runs).
+    The lock auto-releases on COMMIT / ROLLBACK.
+    """
+    bind = session.bind
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+    if dialect_name != "postgresql":
+        return True
+    row = await session.execute(
+        text("SELECT pg_try_advisory_xact_lock(:ns, :uid)"),
+        {"ns": _LOCK_NAMESPACE, "uid": _user_key(user_id)},
+    )
+    return bool(row.scalar())
 
 
 def _pct_to_float(s: str | None) -> float | None:
@@ -78,8 +111,21 @@ async def sync_user(
     """Upsert every entry from the user's disk log into memory_entries.
 
     Returns the number of entries processed (inserted + updated, ignoring
-    malformed entries the parser already skipped).
+    malformed entries the parser already skipped). Returns 0 if another
+    caller holds the per-user advisory lock — the in-flight sync will
+    cover the work; this caller no-ops with a warning. See spec §6.
+
+    Concurrency contract is exercised by tests/test_memory_mirror_
+    concurrent_pg.py — run `cd server && uv run pytest -m pg` before
+    opening a PR that touches this file.
     """
+    if not await _try_acquire(session, user_id):
+        logger.warning(
+            "memory_mirror sync skipped for user_id=%s — lock held by another sync",
+            user_id,
+        )
+        return 0
+
     path = _memory_log_path(dashboard_dir, user_id)
     parsed = _parse_disk(path)
     if not parsed:

@@ -18,12 +18,11 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from app.models.base import Base
-
 # Import all models so their tables are registered on Base.metadata.
 from app.models import memory_entry as _memory_entry  # noqa: F401
 from app.models import run as _run  # noqa: F401
 from app.models import user as _user  # noqa: F401
+from app.models.base import Base
 
 
 @pytest.fixture(scope="session")
