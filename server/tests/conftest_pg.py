@@ -21,7 +21,7 @@ from testcontainers.postgres import PostgresContainer
 from app.models.base import Base
 
 # Import all models so their tables are registered on Base.metadata.
-from app.models import memory_entry as _me  # noqa: F401
+from app.models import memory_entry as _memory_entry  # noqa: F401
 from app.models import run as _run  # noqa: F401
 from app.models import user as _user  # noqa: F401
 
@@ -45,7 +45,11 @@ async def pg_engine(pg_container):
     engine = create_async_engine(async_url, pool_size=4, max_overflow=2)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    try:
+        yield engine
+    finally:
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+        finally:
+            await engine.dispose()
