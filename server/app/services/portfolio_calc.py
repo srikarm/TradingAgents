@@ -16,7 +16,8 @@ is a v2 concern.
 from __future__ import annotations
 
 import statistics
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 RATING_TO_SIZE: dict[str, float] = {
     "Buy": 1.0,
