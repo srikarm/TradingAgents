@@ -1,5 +1,5 @@
+import { SignJWT } from "jose";
 import { auth } from "@/lib/auth";
-import { encode } from "next-auth/jwt";
 import type { RunDetailOut, RunListOut, UserOut } from "@/lib/types";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
@@ -7,15 +7,15 @@ const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
 async function bearer(): Promise<string> {
   const session = await auth();
   if (!session?.user) throw new Error("unauthenticated");
-  // Re-encode the JWT so FastAPI receives the same HS256-signed token.
-  const token = await encode({
-    token: {
-      sub: (session.user as { githubId?: string }).githubId,
-      email: session.user.email ?? null,
-    },
-    secret: process.env.NEXTAUTH_SECRET!,
-    salt: "",
-  });
+  const sub = (session.user as { githubId?: string }).githubId;
+  if (!sub) throw new Error("session missing githubId");
+  const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
+  const token = await new SignJWT({ email: session.user.email ?? null })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(sub)
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret);
   return `Bearer ${token}`;
 }
 
