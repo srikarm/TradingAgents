@@ -48,10 +48,14 @@ def test_cumulative_curve_orders_by_date_then_created_at():
     assert pts[-1]["cumulative_pnl"] == pytest.approx(0.03)
 
 
-def test_cumulative_curve_skips_pending_and_null_returns():
+def test_cumulative_curve_skips_pending():
+    # Pending entries are skipped from the cumulative curve. A previous
+    # version of this test also asserted that resolved+raw=None entries
+    # are silently skipped, but that state is now unrepresentable per
+    # ck_memory_entry_resolved_has_raw_return (spec §4); the defensive
+    # filter in _resolved_pnls was removed in the same change.
     entries = [
         _entry("2024-05-10", "Buy", 0.02),
-        _entry("2024-05-11", "Buy", None, status="resolved"),
         _entry("2024-05-12", "Buy", 0.01, status="pending"),
     ]
     pts = cumulative_curve(entries)

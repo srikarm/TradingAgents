@@ -30,7 +30,7 @@ def client(db_session, monkeypatch):
 
 
 def _add_entry(session, *, user_id, ticker, trade_date, rating,
-               raw=None, status=MemoryEntryStatus.RESOLVED):
+               raw=0.0, status=MemoryEntryStatus.RESOLVED):
     e = MemoryEntry(
         id=uuid.uuid4(),
         user_id=user_id,

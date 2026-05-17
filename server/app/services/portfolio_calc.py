@@ -37,15 +37,17 @@ def rating_to_size(rating: str | None) -> float:
 def _resolved_pnls(entries: Iterable[dict[str, Any]]) -> list[tuple[str, str, float]]:
     """Return list of (trade_date, created_at_sort_key, pnl) for resolved entries.
 
-    Skips pending entries and entries with raw_return=None.
+    Skips pending entries. Resolved entries always have raw_return set
+    (enforced by ck_memory_entry_resolved_has_raw_return — spec §4).
+    A None raw_return on a status='resolved' entry is a contract violation
+    and will surface as a TypeError on the size*float(r) below — desirable
+    loud-failure behavior, not a regression.
     """
     out: list[tuple[str, str, float]] = []
     for e in entries:
         if e.get("status") != "resolved":
             continue
         r = e.get("raw_return")
-        if r is None:
-            continue
         size = rating_to_size(e.get("rating"))
         sort_key = str(e.get("created_at") or e.get("trade_date") or "")
         out.append((str(e["trade_date"]), sort_key, size * float(r)))
