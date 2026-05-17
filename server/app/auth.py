@@ -3,6 +3,7 @@ import uuid
 import jwt
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -51,8 +52,15 @@ async def get_current_user(
     user = (
         await db.execute(select(User).where(User.github_id == github_id))
     ).scalar_one_or_none()
-    if user is None:
-        user = User(id=uuid.uuid4(), github_id=github_id, email=email)
-        db.add(user)
+    if user is not None:
+        return user
+    user = User(id=uuid.uuid4(), github_id=github_id, email=email)
+    db.add(user)
+    try:
         await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        user = (
+            await db.execute(select(User).where(User.github_id == github_id))
+        ).scalar_one()
     return user
