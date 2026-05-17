@@ -15,22 +15,60 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    working_dir: /app/server
     environment:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       DATABASE_URL: postgresql+asyncpg://trading:trading@db:5432/trading_dashboard
       DASHBOARD_DATA_DIR: /data
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - dashdata:/data
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
     command: >
       sh -c "uv run alembic upgrade head &&
              uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    working_dir: /app/server
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      DATABASE_URL: postgresql+asyncpg://trading:trading@db:5432/trading_dashboard
+      DASHBOARD_DATA_DIR: /data
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    volumes:
+      - dashdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["uv", "run", "arq", "app.workers.worker.WorkerSettings"]
 
   web:
     build: ./web

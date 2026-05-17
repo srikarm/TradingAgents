@@ -36,3 +36,18 @@ export interface UserOut {
   email: string | null;
   created_at: string;
 }
+
+export type AnalystKey = "market" | "social" | "news" | "fundamentals";
+
+export interface RunCreate {
+  ticker: string;
+  trade_date: string;
+  analysts?: AnalystKey[];
+  asset_type?: "stock" | "crypto";
+}
+
+export interface RunTailOut {
+  content: string;
+  next_offset: number;
+  status: RunStatus;
+}

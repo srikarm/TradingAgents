@@ -299,3 +299,23 @@ docker compose exec api uv run python -m app.scripts.import_runs \
 
 Read-only browsing only in Wave 1. Run launching, live monitoring, and
 portfolio analytics arrive in Waves 2 and 3.
+
+### Wave 2 — Launch + Live Monitor
+
+You can now launch new analyses from the dashboard. The arq worker
+runs `TradingAgentsGraph.propagate()` against your namespace; the live
+monitor polls `/runs/{id}/tail` every 2s to stream output.
+
+Additional setup:
+
+```bash
+# Set LLM provider credentials in your .env (read by the worker):
+echo "OPENAI_API_KEY=sk-..." >> .env
+
+# The worker service is part of the same docker compose stack:
+docker compose up --build
+# (web on :3000, api on :8000, worker consuming from redis:6379)
+```
+
+A run in progress can be watched at `/live/<run_id>` and shows the live
+`message_tool.log` plus a status pill (queued → running → succeeded/failed).

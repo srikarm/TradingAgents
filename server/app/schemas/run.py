@@ -1,7 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+AnalystKey = Literal["market", "social", "news", "fundamentals"]
+AssetType = Literal["stock", "crypto"]
+RunStatusLiteral = Literal["queued", "running", "succeeded", "failed"]
 
 
 class RunOut(BaseModel):
@@ -34,3 +39,23 @@ class RunDetailOut(RunOut):
     results_path: str
     error_summary: str | None
     report_sections: ReportSections
+
+
+class RunCreate(BaseModel):
+    """Request body for POST /runs."""
+
+    ticker: str = Field(min_length=1, max_length=12, pattern=r"^[A-Za-z0-9.\-]+$")
+    trade_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    analysts: list[AnalystKey] = Field(
+        default_factory=lambda: ["market", "social", "news", "fundamentals"],
+        max_length=4,
+    )
+    asset_type: AssetType = "stock"
+
+
+class RunTailOut(BaseModel):
+    """Response from GET /runs/{id}/tail."""
+
+    content: str
+    next_offset: int
+    status: RunStatusLiteral
