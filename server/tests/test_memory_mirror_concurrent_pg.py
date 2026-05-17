@@ -1,14 +1,16 @@
 """Concurrent-race regression test for memory_mirror.sync_user.
 
 Without the advisory lock, two simultaneous sync_user() calls for the
-same user_id will both SELECT-then-INSERT for the same (user_id, ticker,
-trade_date) triples and the second commit raises IntegrityError on the
-uq_memory_entry_user_ticker_date constraint. With the lock, the second
-caller acquires nothing, logs a warning, and returns 0.
+same user_id race over the uq_memory_entry_user_ticker_date constraint.
+Two failure modes are observable in RED:
+  - Both callers return N (one wins the SELECT/INSERT, the other's
+    SELECT sees the just-committed rows and takes the UPDATE path);
+  - One returns N and the other raises IntegrityError on commit
+    (truly concurrent interleaving under cooperative scheduling).
 
-Asyncio's cooperative scheduling guarantees the race: every per-entry
-`await session.execute(SELECT ...)` is a yield point where the two
-coroutines interleave. No monkeypatching needed to force overlap.
+The `sorted([a, b]) == [0, N]` assertion catches both: only the lock
+produces a 0 return value. With the lock, the second caller fails
+pg_try_advisory_xact_lock, logs a warning, and returns 0.
 """
 
 from __future__ import annotations

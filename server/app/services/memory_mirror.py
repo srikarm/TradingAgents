@@ -36,6 +36,8 @@ def _user_key(user_id: uuid.UUID) -> int:
     """Map a user UUID to a signed int32 advisory-lock key (deterministic)."""
     # Python's built-in hash() is randomized per-process; BLAKE2 is
     # deterministic — required so two workers compute the same key.
+    # Collision probability ≈ 1/2³² per user pair; cost of collision is
+    # a spurious skip, not a correctness bug. Accepted per spec §3.2.
     digest = hashlib.blake2b(user_id.bytes, digest_size=4).digest()
     return struct.unpack(">i", digest)[0]
 
@@ -47,12 +49,18 @@ async def _try_acquire(session: AsyncSession, user_id: uuid.UUID) -> bool:
     non-Postgres dialects — the lock is a no-op for SQLite test runs).
     The lock auto-releases on COMMIT / ROLLBACK.
     """
-    bind = session.bind
+    bind = getattr(session, "bind", None)
     dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
     if dialect_name != "postgresql":
         return True
+    # CAST(... AS integer) pins the (int4, int4) overload of
+    # pg_try_advisory_xact_lock without colliding with SQLAlchemy text()'s
+    # ":bind" syntax (the Postgres "::" cast operator conflicts with it).
     row = await session.execute(
-        text("SELECT pg_try_advisory_xact_lock(:ns, :uid)"),
+        text(
+            "SELECT pg_try_advisory_xact_lock("
+            "CAST(:ns AS integer), CAST(:uid AS integer))"
+        ),
         {"ns": _LOCK_NAMESPACE, "uid": _user_key(user_id)},
     )
     return bool(row.scalar())
