@@ -140,3 +140,108 @@ async def test_curve_ignores_pending_entries(client, db_session):
         )
     assert r.status_code == 200
     assert len(r.json()["points"]) == 1
+
+
+from app.routers import portfolio as portfolio_router  # noqa: E402
+from app.services import price_cache as _pc  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_returns_decisions_and_prices(
+    client, db_session, monkeypatch
+):
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-td"))
+    _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-10",
+               rating="Buy", raw=0.023)
+    _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-15",
+               rating="Sell", raw=0.01)
+    await db_session.flush()
+
+    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end):
+        return [
+            {"trade_date": "2024-05-10", "close": 100.0},
+            {"trade_date": "2024-05-15", "close": 102.0},
+        ]
+
+    monkeypatch.setattr(portfolio_router, "_fetch_prices", fake_fetch)
+
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/NVDA",
+            headers={"Authorization": f"Bearer {make_jwt('gh-td')}"},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticker"] == "NVDA"
+    assert len(body["prices"]) == 2
+    assert len(body["decisions"]) == 2
+    assert body["decisions"][0]["rating"] == "Buy"
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_returns_404_for_unknown_ticker(client, db_session):
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-tn"))
+    await db_session.flush()
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/NVDA",
+            headers={"Authorization": f"Bearer {make_jwt('gh-tn')}"},
+        )
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_isolates_users(client, db_session):
+    me, other = uuid.uuid4(), uuid.uuid4()
+    db_session.add(User(id=me, github_id="gh-ti-me"))
+    db_session.add(User(id=other, github_id="gh-ti-other"))
+    _add_entry(db_session, user_id=other, ticker="NVDA", trade_date="2024-05-10",
+               rating="Buy", raw=0.5)
+    await db_session.flush()
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/NVDA",
+            headers={"Authorization": f"Bearer {make_jwt('gh-ti-me')}"},
+        )
+    # other user has NVDA; me has nothing → 404 (no existence oracle)
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_returns_502_on_yfinance_failure(
+    client, db_session, monkeypatch
+):
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-tf"))
+    _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-10",
+               rating="Buy", raw=0.02)
+    await db_session.flush()
+
+    async def boom(*a, **kw):
+        raise _pc.PriceFetchError("yf down")
+
+    monkeypatch.setattr(portfolio_router, "_fetch_prices", boom)
+
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/NVDA",
+            headers={"Authorization": f"Bearer {make_jwt('gh-tf')}"},
+        )
+    assert r.status_code == 502
+    assert r.json()["detail"]["error"] == "price_data_unavailable"
+    assert r.json()["detail"]["ticker"] == "NVDA"
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_rejects_bad_ticker_format(client, db_session):
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-tx"))
+    await db_session.flush()
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/..%2Fetc%2Fpasswd",
+            headers={"Authorization": f"Bearer {make_jwt('gh-tx')}"},
+        )
+    assert r.status_code in (404, 422)
