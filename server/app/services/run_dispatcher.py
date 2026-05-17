@@ -72,9 +72,16 @@ async def dispatch_run(
     await session.commit()
     await session.refresh(run)
 
-    await pool.enqueue_job(
-        "run_propagate",
-        str(run.id),
-        _job_id=f"run_{run.id}",
-    )
+    try:
+        await pool.enqueue_job(
+            "run_propagate",
+            str(run.id),
+            _job_id=f"run_{run.id}",
+        )
+    except Exception:
+        # Enqueue failed — mark the row FAILED so it doesn't stick in QUEUED.
+        run.status = RunStatus.FAILED
+        run.error_summary = "enqueue_failed"
+        await session.commit()
+        raise
     return run

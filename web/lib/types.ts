@@ -43,9 +43,6 @@ export interface RunCreate {
   ticker: string;
   trade_date: string;
   analysts?: AnalystKey[];
-  llm_provider?: string;
-  deep_think_llm?: string;
-  quick_think_llm?: string;
   asset_type?: "stock" | "crypto";
 }
 

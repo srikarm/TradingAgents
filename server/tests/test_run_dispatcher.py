@@ -13,6 +13,7 @@ from app.services.run_dispatcher import (
 )
 
 
+
 class FakePool:
     def __init__(self):
         self.enqueued: list[tuple[str, tuple, dict]] = []
@@ -119,3 +120,31 @@ async def test_dispatch_run_allows_relaunch_of_completed(db_session, tmp_path):
         body=body,
     )
     assert run.status is RunStatus.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_dispatch_run_marks_failed_when_enqueue_raises(db_session, tmp_path):
+    """If pool.enqueue_job raises, the just-committed Run row must be marked FAILED
+    so it isn't stuck in QUEUED forever."""
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-enq"))
+    await db_session.flush()
+
+    class FailingPool:
+        async def enqueue_job(self, *a, **kw):
+            raise RuntimeError("redis down")
+
+    body = RunCreate(ticker="NVDA", trade_date="2024-05-10")
+    with pytest.raises(RuntimeError, match="redis down"):
+        await dispatch_run(
+            session=db_session,
+            pool=FailingPool(),
+            user_id=uid,
+            dashboard_dir=tmp_path,
+            body=body,
+        )
+
+    rows = (await db_session.execute(select(Run))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status is RunStatus.FAILED
+    assert rows[0].error_summary == "enqueue_failed"

@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     heartbeat_interval_seconds: int = 30
     orphan_threshold_seconds: int = 600  # 10 minutes
-    orphan_sweeper_interval_seconds: int = 300  # 5 minutes
     default_llm_provider: str = "openai"
     default_deep_think_llm: str = "gpt-5.4"
     default_quick_think_llm: str = "gpt-5.4-mini"

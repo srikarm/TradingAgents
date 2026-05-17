@@ -104,8 +104,11 @@ async def _heartbeat_loop(session_factory, run_id: uuid.UUID, interval: int, log
     """Update Run.last_heartbeat_at every `interval` seconds until cancelled.
 
     Also appends a timestamped tick to the worker's message_tool.log so the
-    live monitor shows progress between propagate() phases.
+    live monitor shows progress between propagate() phases. Log-write failures
+    are reported the first few times then suppressed to avoid spamming stderr
+    on a full disk.
     """
+    log_failures = 0
     while True:
         try:
             await asyncio.sleep(interval)
@@ -123,8 +126,12 @@ async def _heartbeat_loop(session_factory, run_id: uuid.UUID, interval: int, log
             logger.exception("heartbeat update failed for run_id=%s", run_id)
         try:
             _append_log(log_path, "[heartbeat] still running")
+            log_failures = 0
         except Exception:  # noqa: BLE001
-            logger.exception("heartbeat log append failed for run_id=%s", run_id)
+            log_failures += 1
+            if log_failures <= 3:
+                logger.exception("heartbeat log append failed for run_id=%s (failure %d)", run_id, log_failures)
+            # silently skip further log writes; heartbeat DB update still proceeds.
 
 
 async def run_propagate(ctx: dict, run_id_str: str) -> None:
@@ -179,6 +186,7 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
     except Exception as exc:  # noqa: BLE001
         import traceback
 
+        logger.exception("run_propagate failed for run_id=%s", run_id)
         error_summary = str(exc)[:500]
         error_detail = traceback.format_exc()[:8000]
         _append_log(log_path, f"[failed] {error_summary}")

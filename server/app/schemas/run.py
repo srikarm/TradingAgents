@@ -50,9 +50,6 @@ class RunCreate(BaseModel):
         default_factory=lambda: ["market", "social", "news", "fundamentals"],
         max_length=4,
     )
-    llm_provider: str | None = None
-    deep_think_llm: str | None = None
-    quick_think_llm: str | None = None
     asset_type: AssetType = "stock"
 
 
