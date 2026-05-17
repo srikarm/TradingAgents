@@ -15,6 +15,7 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 
@@ -74,7 +75,6 @@ async def test_migration_demotes_bad_rows_and_adds_constraint(pre_migration_engi
     assert rows[0][1] is None
 
     # 2. The constraint now rejects new violators.
-    from sqlalchemy.exc import IntegrityError
     with pytest.raises(IntegrityError):
         async with engine.begin() as conn:
             await conn.execute(text(

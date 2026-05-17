@@ -1,5 +1,4 @@
 import uuid
-import uuid as _uuid2
 from datetime import datetime, timezone
 
 import pytest
@@ -47,10 +46,10 @@ async def test_run_insert_and_query(db_session):
 
 @pytest.mark.asyncio
 async def test_memory_entry_round_trips_pending(db_session):
-    uid = _uuid2.uuid4()
+    uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-me1"))
     entry = MemoryEntry(
-        id=_uuid2.uuid4(),
+        id=uuid.uuid4(),
         user_id=uid,
         ticker="NVDA",
         trade_date="2024-05-10",
@@ -73,10 +72,10 @@ async def test_memory_entry_round_trips_pending(db_session):
 
 @pytest.mark.asyncio
 async def test_memory_entry_round_trips_resolved(db_session):
-    uid = _uuid2.uuid4()
+    uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-me2"))
     entry = MemoryEntry(
-        id=_uuid2.uuid4(),
+        id=uuid.uuid4(),
         user_id=uid,
         ticker="NVDA",
         trade_date="2024-05-10",
@@ -103,13 +102,13 @@ async def test_resolved_without_raw_return_rejected(db_session):
     """ck_memory_entry_resolved_has_raw_return enforces the invariant:
     status=RESOLVED ⟹ raw_return IS NOT NULL.
     """
-    uid = _uuid2.uuid4()
+    uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-ck"))
     await db_session.flush()
 
     db_session.add(
         MemoryEntry(
-            id=_uuid2.uuid4(),
+            id=uuid.uuid4(),
             user_id=uid,
             ticker="NVDA",
             trade_date="2024-05-09",
