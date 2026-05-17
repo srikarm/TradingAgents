@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { AnalystKey } from "@/lib/types";
 
 export type LaunchFormError =
@@ -19,19 +19,28 @@ export async function launchRunAction(formData: FormData): Promise<LaunchFormErr
     (a): a is AnalystKey =>
       a === "market" || a === "social" || a === "news" || a === "fundamentals"
   );
+
+  let runId: string;
   try {
-    const { run_id } = await api.createRun({
+    const res = await api.createRun({
       ticker,
       trade_date,
       analysts: analysts.length ? analysts : undefined,
     });
-    redirect(`/live/${run_id}`);
+    runId = res.run_id;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("409")) {
-      const match = msg.match(/"existing_run_id":\s*"([0-9a-f-]+)"/);
-      if (match) return { kind: "conflict", existingRunId: match[1] };
+    if (e instanceof ApiError && e.status === 409) {
+      const body = e.body as Record<string, unknown> | null;
+      const detail = body?.detail as Record<string, unknown> | undefined;
+      const existingRunId = detail?.existing_run_id;
+      if (typeof existingRunId === "string") {
+        return { kind: "conflict", existingRunId };
+      }
     }
+    const msg = e instanceof Error ? e.message : String(e);
     return { kind: "unknown", message: msg };
   }
+
+  // Outside try: redirect() throws NEXT_REDIRECT, must not be caught.
+  redirect(`/live/${runId}`);
 }

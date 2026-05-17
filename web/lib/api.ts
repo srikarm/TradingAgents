@@ -10,11 +10,22 @@ import type {
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: unknown,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function bearer(): Promise<string> {
   const session = await auth();
-  if (!session?.user) throw new Error("unauthenticated");
+  if (!session?.user) throw new ApiError(401, null, "unauthenticated");
   const sub = (session.user as { githubId?: string }).githubId;
-  if (!sub) throw new Error("session missing githubId");
+  if (!sub) throw new ApiError(401, null, "session missing githubId");
   const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!);
   const token = await new SignJWT({ email: session.user.email ?? null })
     .setProtectedHeader({ alg: "HS256" })
@@ -25,12 +36,23 @@ async function bearer(): Promise<string> {
   return `Bearer ${token}`;
 }
 
+async function parseBody(res: Response): Promise<unknown> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) {
+    try { return await res.json(); } catch { return null; }
+  }
+  try { return await res.text(); } catch { return null; }
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: await bearer() },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`api ${path} failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await parseBody(res);
+    throw new ApiError(res.status, body, `api ${path} failed: ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -45,8 +67,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     cache: "no-store",
   });
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`api ${path} failed: ${res.status} ${detail}`);
+    const respBody = await parseBody(res);
+    throw new ApiError(res.status, respBody, `api ${path} failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }

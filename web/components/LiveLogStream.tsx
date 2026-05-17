@@ -7,11 +7,18 @@ interface Props {
   runId: string;
   initialStatus: RunStatus;
   pollIntervalMs?: number;
+  maxConsecutiveFailures?: number;
 }
 
-export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2000 }: Props) {
+export default function LiveLogStream({
+  runId,
+  initialStatus,
+  pollIntervalMs = 2000,
+  maxConsecutiveFailures = 5,
+}: Props) {
   const [content, setContent] = useState("");
   const [status, setStatus] = useState<RunStatus>(initialStatus);
+  const [streamHealth, setStreamHealth] = useState<"ok" | "degraded" | "broken">("ok");
   const offsetRef = useRef(0);
   const scrollRef = useRef<HTMLPreElement | null>(null);
 
@@ -20,6 +27,7 @@ export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2
     const ctl = new AbortController();
     let stopped = false;
     let backoffMs = pollIntervalMs;
+    let consecutiveFailures = 0;
 
     async function poll() {
       while (!stopped) {
@@ -29,8 +37,18 @@ export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2
             cache: "no-store",
           });
           if (!res.ok) {
+            consecutiveFailures += 1;
             backoffMs = Math.min(backoffMs * 2, 16000);
+            if (consecutiveFailures >= maxConsecutiveFailures) {
+              setStreamHealth("broken");
+              console.error(`stream gave up after ${consecutiveFailures} failures (last status ${res.status})`);
+              break;
+            } else if (consecutiveFailures >= 2) {
+              setStreamHealth("degraded");
+            }
           } else {
+            consecutiveFailures = 0;
+            setStreamHealth("ok");
             const data: RunTailOut = await res.json();
             offsetRef.current = data.next_offset;
             if (data.content) setContent((c) => c + data.content);
@@ -40,7 +58,15 @@ export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2
           }
         } catch (e) {
           if (ctl.signal.aborted) return;
+          consecutiveFailures += 1;
           backoffMs = Math.min(backoffMs * 2, 16000);
+          console.error("tail poll failed:", e);
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            setStreamHealth("broken");
+            break;
+          } else if (consecutiveFailures >= 2) {
+            setStreamHealth("degraded");
+          }
         }
         await new Promise((r) => setTimeout(r, backoffMs));
       }
@@ -51,7 +77,7 @@ export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2
       stopped = true;
       ctl.abort();
     };
-  }, [runId, status, pollIntervalMs]);
+  }, [runId, status, pollIntervalMs, maxConsecutiveFailures]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -70,6 +96,16 @@ export default function LiveLogStream({ runId, initialStatus, pollIntervalMs = 2
           animation: status === "running" ? "pulse 1.5s infinite" : "none",
         }} />
         <strong style={{ textTransform: "uppercase", fontSize: 12 }}>{status}</strong>
+        {streamHealth === "degraded" && (
+          <span style={{ fontSize: 11, color: "#b45309", marginLeft: 8 }}>
+            Connection lost — retrying
+          </span>
+        )}
+        {streamHealth === "broken" && (
+          <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>
+            Stream unavailable — reload to retry
+          </span>
+        )}
       </div>
       <pre
         ref={scrollRef}
