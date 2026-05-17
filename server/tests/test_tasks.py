@@ -199,3 +199,82 @@ async def test_run_propagate_heartbeat_updates_last_heartbeat_at(tmp_path, monke
     # And the log file should contain a [heartbeat] line written by the heartbeat loop.
     log_text = (tmp_path / "NVDA" / "2024-05-10" / "message_tool.log").read_text()
     assert "[heartbeat]" in log_text
+
+
+@pytest.mark.asyncio
+async def test_run_propagate_invokes_memory_mirror_on_success(
+    db_session, tmp_path, monkeypatch
+):
+    """After a successful propagate, the worker syncs memory_mirror for the user."""
+    monkeypatch.setattr(worker_tasks, "_graph_factory", lambda **kw: StubGraph(**kw))
+    monkeypatch.setattr(
+        worker_tasks, "_session_factory_for_worker", _factory_yielding(db_session)
+    )
+
+    calls: list[tuple] = []
+
+    async def fake_sync_user(session, *, dashboard_dir, user_id):
+        calls.append((dashboard_dir, user_id))
+        return 1
+
+    monkeypatch.setattr(worker_tasks, "_memory_mirror_sync", fake_sync_user)
+
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-mm-w"))
+    run_id = uuid.uuid4()
+    db_session.add(
+        Run(
+            id=run_id,
+            user_id=uid,
+            ticker="NVDA",
+            trade_date="2024-05-10",
+            status=RunStatus.QUEUED,
+            results_path=str(tmp_path / "NVDA" / "2024-05-10"),
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+
+    await worker_tasks.run_propagate({"redis": MagicMock()}, str(run_id))
+
+    assert len(calls) == 1
+    _dir, called_uid = calls[0]
+    assert called_uid == uid
+
+
+@pytest.mark.asyncio
+async def test_run_propagate_mirror_failure_does_not_fail_run(
+    db_session, tmp_path, monkeypatch
+):
+    """A mirror exception must be swallowed; the run still marks SUCCEEDED."""
+    monkeypatch.setattr(worker_tasks, "_graph_factory", lambda **kw: StubGraph(**kw))
+    monkeypatch.setattr(
+        worker_tasks, "_session_factory_for_worker", _factory_yielding(db_session)
+    )
+
+    async def boom(session, *, dashboard_dir, user_id):
+        raise RuntimeError("mirror exploded")
+
+    monkeypatch.setattr(worker_tasks, "_memory_mirror_sync", boom)
+
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-mm-w2"))
+    run_id = uuid.uuid4()
+    db_session.add(
+        Run(
+            id=run_id,
+            user_id=uid,
+            ticker="NVDA",
+            trade_date="2024-05-10",
+            status=RunStatus.QUEUED,
+            results_path=str(tmp_path / "NVDA" / "2024-05-10"),
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+
+    await worker_tasks.run_propagate({"redis": MagicMock()}, str(run_id))
+    await db_session.flush()
+
+    found = (await db_session.execute(select(Run).where(Run.id == run_id))).scalar_one()
+    assert found.status is RunStatus.SUCCEEDED
