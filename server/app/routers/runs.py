@@ -1,4 +1,5 @@
 import uuid as _uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -9,7 +10,8 @@ from app.config import get_settings
 from app.db import get_db
 from app.models.run import Run
 from app.models.user import User
-from app.schemas.run import RunCreate, RunDetailOut, RunListOut, RunOut
+from app.schemas.run import RunCreate, RunDetailOut, RunListOut, RunOut, RunTailOut
+from app.services.log_tailer import tail_log
 from app.services.redis_pool import get_redis_pool
 from app.services.run_dispatcher import DuplicateRunningError, dispatch_run
 from app.services.run_loader import load_report_sections
@@ -88,4 +90,28 @@ async def get_run(
     sections = load_report_sections(run.results_path)
     return RunDetailOut.model_validate(
         {**run.__dict__, "report_sections": sections.model_dump()}
+    )
+
+
+@router.get("/{run_id}/tail", response_model=RunTailOut)
+async def tail_run(
+    run_id: _uuid.UUID,
+    since: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RunTailOut:
+    run = (
+        await db.execute(
+            select(Run).where(Run.id == run_id, Run.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    settings = get_settings()
+    log_path = Path(run.results_path) / "message_tool.log"
+    result = tail_log(log_path, since=since, max_bytes=settings.max_tail_bytes)
+    return RunTailOut(
+        content=result.content,
+        next_offset=result.next_offset,
+        status=run.status.value,
     )
