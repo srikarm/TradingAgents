@@ -37,3 +37,64 @@ async def test_run_insert_and_query(db_session):
     found = (await db_session.execute(select(Run))).scalar_one()
     assert found.ticker == "NVDA"
     assert found.status is RunStatus.SUCCEEDED
+
+
+# ---- MemoryEntry tests ----
+
+import uuid as _uuid2
+from datetime import timezone
+
+from app.models.memory_entry import MemoryEntry, MemoryEntryStatus
+
+
+@pytest.mark.asyncio
+async def test_memory_entry_round_trips_pending(db_session):
+    uid = _uuid2.uuid4()
+    db_session.add(User(id=uid, github_id="gh-me1"))
+    entry = MemoryEntry(
+        id=_uuid2.uuid4(),
+        user_id=uid,
+        ticker="NVDA",
+        trade_date="2024-05-10",
+        rating="Buy",
+        status=MemoryEntryStatus.PENDING,
+        raw_return=None,
+        alpha_return=None,
+        holding_days=None,
+        decision_text="rationale",
+        reflection_text=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(entry)
+    await db_session.flush()
+    found = (await db_session.execute(select(MemoryEntry))).scalar_one()
+    assert found.status is MemoryEntryStatus.PENDING
+    assert found.raw_return is None
+
+
+@pytest.mark.asyncio
+async def test_memory_entry_round_trips_resolved(db_session):
+    uid = _uuid2.uuid4()
+    db_session.add(User(id=uid, github_id="gh-me2"))
+    entry = MemoryEntry(
+        id=_uuid2.uuid4(),
+        user_id=uid,
+        ticker="NVDA",
+        trade_date="2024-05-10",
+        rating="Buy",
+        status=MemoryEntryStatus.RESOLVED,
+        raw_return=0.023,
+        alpha_return=0.011,
+        holding_days=7,
+        decision_text="rationale",
+        reflection_text="worked because earnings beat",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(entry)
+    await db_session.flush()
+    found = (await db_session.execute(select(MemoryEntry))).scalar_one()
+    assert found.status is MemoryEntryStatus.RESOLVED
+    assert found.raw_return == pytest.approx(0.023)
+    assert found.holding_days == 7
