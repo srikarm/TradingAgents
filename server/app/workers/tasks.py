@@ -53,8 +53,59 @@ def _build_config(run: Run) -> dict:
     return cfg
 
 
-async def _heartbeat_loop(session_factory, run_id: uuid.UUID, interval: int) -> None:
-    """Update Run.last_heartbeat_at every `interval` seconds until cancelled."""
+def _append_log(path: Path, message: str) -> None:
+    """Append a timestamped line to message_tool.log. Creates parent dirs + file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(f"{ts} {message}\n")
+
+
+def _persist_reports(run_path: Path, final_state: dict) -> None:
+    """Write the markdown reports from final_state to disk.
+
+    Mirrors the layout used by cli/main.py:save_report_to_disk so the
+    existing GET /runs/{id} endpoint can read them via load_report_sections.
+    """
+    reports = run_path / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    analysts = reports / "1_analysts"
+    research = reports / "2_research"
+    trading = reports / "3_trading"
+
+    for section_key, rel_path in [
+        ("market_report", analysts / "market.md"),
+        ("sentiment_report", analysts / "sentiment.md"),
+        ("news_report", analysts / "news.md"),
+        ("fundamentals_report", analysts / "fundamentals.md"),
+    ]:
+        text = final_state.get(section_key)
+        if text:
+            rel_path.parent.mkdir(parents=True, exist_ok=True)
+            rel_path.write_text(text, encoding="utf-8")
+
+    debate = final_state.get("investment_debate_state") or {}
+    judge = debate.get("judge_decision")
+    if judge:
+        research.mkdir(parents=True, exist_ok=True)
+        (research / "manager.md").write_text(judge, encoding="utf-8")
+
+    trader_plan = final_state.get("trader_investment_plan")
+    if trader_plan:
+        trading.mkdir(parents=True, exist_ok=True)
+        (trading / "trader.md").write_text(trader_plan, encoding="utf-8")
+
+    final = final_state.get("final_trade_decision")
+    if final:
+        (reports / "final_trade_decision.md").write_text(final, encoding="utf-8")
+
+
+async def _heartbeat_loop(session_factory, run_id: uuid.UUID, interval: int, log_path: Path) -> None:
+    """Update Run.last_heartbeat_at every `interval` seconds until cancelled.
+
+    Also appends a timestamped tick to the worker's message_tool.log so the
+    live monitor shows progress between propagate() phases.
+    """
     while True:
         try:
             await asyncio.sleep(interval)
@@ -68,8 +119,12 @@ async def _heartbeat_loop(session_factory, run_id: uuid.UUID, interval: int) -> 
                     .values(last_heartbeat_at=datetime.now(timezone.utc))
                 )
                 await session.commit()
-        except Exception:  # noqa: BLE001 — heartbeat failures must not kill the worker
+        except Exception:  # noqa: BLE001
             logger.exception("heartbeat update failed for run_id=%s", run_id)
+        try:
+            _append_log(log_path, "[heartbeat] still running")
+        except Exception:  # noqa: BLE001
+            logger.exception("heartbeat log append failed for run_id=%s", run_id)
 
 
 async def run_propagate(ctx: dict, run_id_str: str) -> None:
@@ -91,10 +146,17 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
         await session.commit()
         ticker = run.ticker
         trade_date = run.trade_date
+        results_path = Path(run.results_path)
         config = _build_config(run)
 
+    # Set up the per-run results directory and message_tool.log path.
+    # The Run.results_path is <user_dir>/<ticker>/<date> — that's where we
+    # write both the log and (after propagate) the reports.
+    log_path = results_path / "message_tool.log"
+    _append_log(log_path, f"[start] launching propagate for {ticker} on {trade_date}")
+
     heartbeat = asyncio.create_task(
-        _heartbeat_loop(session_factory, run_id, settings.heartbeat_interval_seconds)
+        _heartbeat_loop(session_factory, run_id, settings.heartbeat_interval_seconds, log_path)
     )
 
     error_summary: str | None = None
@@ -105,20 +167,21 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
             selected_analysts=["market", "social", "news", "fundamentals"],
             config=config,
         )
-        # propagate() may be sync — run in default executor so we don't block the
-        # event loop and the heartbeat keeps firing.
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None, lambda: graph.propagate(ticker, trade_date)
         )
-        # propagate() returns (final_state_dict, decision_str) in real impl
         if isinstance(result, tuple) and len(result) == 2:
-            final_rating = str(result[1]).split()[0] if result[1] else None
+            final_state, decision = result
+            final_rating = str(decision).split()[0] if decision else None
+            _persist_reports(results_path, final_state)
+        _append_log(log_path, f"[completed] final_rating={final_rating}")
     except Exception as exc:  # noqa: BLE001
         import traceback
 
         error_summary = str(exc)[:500]
         error_detail = traceback.format_exc()[:8000]
+        _append_log(log_path, f"[failed] {error_summary}")
     finally:
         heartbeat.cancel()
         try:

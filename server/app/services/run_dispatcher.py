@@ -69,7 +69,8 @@ async def dispatch_run(
         created_at=datetime.now(timezone.utc),
     )
     session.add(run)
-    await session.flush()
+    await session.commit()
+    await session.refresh(run)
 
     await pool.enqueue_job(
         "run_propagate",
