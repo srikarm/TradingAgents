@@ -1,0 +1,38 @@
+[project]
+name = "tradingagents-server"
+version = "0.1.0"
+description = "FastAPI backend for the TradingAgents dashboard"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.118",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    "pydantic-settings>=2.6",
+    "pyjwt>=2.9",
+    "python-multipart>=0.0.18",
+    "httpx>=0.28",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "anyio>=4.6",
+    "ruff>=0.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]  # allow asserts in tests
