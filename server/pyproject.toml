@@ -25,12 +25,16 @@ dev = [
     "pytest-asyncio>=0.24",
     "anyio>=4.6",
     "ruff>=0.7",
+    "testcontainers[postgres]>=4.8",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-ra"
+addopts = "-ra -m 'not pg'"
+markers = [
+    "pg: requires a real Postgres backend (uses testcontainers + Docker); excluded by default. Run with `pytest -m pg` or `pytest -m 'pg or not pg'` to include.",
+]
 
 [tool.ruff]
 line-length = 100
