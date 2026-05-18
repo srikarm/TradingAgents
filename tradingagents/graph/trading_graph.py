@@ -406,7 +406,11 @@ class TradingAgentsGraph:
                 # Defensive fallback: if no "values" chunk arrived (shouldn't
                 # happen with the modes above), make sure we still return a
                 # usable state rather than crashing downstream consumers.
-                final_state = self.graph.invoke(init_agent_state, **args)
+                # Use stream_args (already stripped of stream_mode) for
+                # consistency with the stream() call above — invoke() ignores
+                # stream_mode today but stripping it keeps semantics clean and
+                # forward-safe against a stricter future LangGraph.
+                final_state = self.graph.invoke(init_agent_state, **stream_args)
         elif self.debug:
             trace = []
             for chunk in self.graph.stream(init_agent_state, **args):
