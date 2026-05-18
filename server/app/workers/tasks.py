@@ -181,9 +181,26 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
             selected_analysts=["market", "social", "news", "fundamentals"],
             config=config,
         )
+
+        def _on_node(node_name: str) -> None:
+            # Called from the executor thread once per LangGraph node
+            # transition. _append_log opens the file in append mode for each
+            # write, so it is safe to interleave with the heartbeat loop's
+            # writes from the asyncio event loop (POSIX append-mode line
+            # writes are atomic for small payloads).
+            try:
+                _append_log(log_path, f"[node] {node_name}")
+            except Exception:  # noqa: BLE001
+                # Live-monitor log is best-effort; never abort the run.
+                logger.exception(
+                    "run_propagate: failed to append [node] %s for run_id=%s",
+                    node_name, run_id,
+                )
+
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
-            None, lambda: graph.propagate(ticker, trade_date)
+            None,
+            lambda: graph.propagate(ticker, trade_date, progress_callback=_on_node),
         )
         if isinstance(result, tuple) and len(result) == 2:
             final_state, decision = result

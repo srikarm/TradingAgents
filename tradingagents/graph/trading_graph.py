@@ -292,7 +292,13 @@ class TradingAgentsGraph:
         if updates:
             self.memory_log.batch_update_with_outcomes(updates)
 
-    def propagate(self, company_name, trade_date, asset_type: str = "stock"):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        progress_callback=None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         ``asset_type`` selects between the stock pipeline (default) and the
@@ -301,6 +307,14 @@ class TradingAgentsGraph:
         ``checkpoint_enabled`` is set in config, the graph is recompiled with
         a per-ticker SqliteSaver so a crashed run can resume from the last
         successful node on a subsequent invocation with the same ticker+date.
+
+        ``progress_callback`` is an optional ``(node_name: str) -> None``
+        invoked once per LangGraph node transition. The dashboard worker
+        uses it to write a `[node] X` line per node to the run's
+        ``message_tool.log`` so the live monitor surfaces graph activity
+        instead of just heartbeat ticks. Default ``None`` preserves the
+        existing ``graph.invoke()`` execution path for CLI callers.
+        Exceptions raised by the callback are logged but never propagated.
         """
         self.ticker = company_name
 
@@ -326,14 +340,25 @@ class TradingAgentsGraph:
                 logger.info("Starting fresh for %s on %s", company_name, trade_date)
 
         try:
-            return self._run_graph(company_name, trade_date, asset_type=asset_type)
+            return self._run_graph(
+                company_name,
+                trade_date,
+                asset_type=asset_type,
+                progress_callback=progress_callback,
+            )
         finally:
             if self._checkpointer_ctx is not None:
                 self._checkpointer_ctx.__exit__(None, None, None)
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        progress_callback=None,
+    ):
         """Execute the graph and write the resulting state to disk and memory log."""
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
@@ -347,7 +372,38 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if self.debug:
+        if progress_callback is not None:
+            # Stream once with both modes so we get node names ("updates") AND
+            # the cumulative final state ("values") without invoking twice.
+            # LangGraph 1.x yields (mode, chunk) tuples in this configuration.
+            final_state = None
+            for mode, chunk in self.graph.stream(
+                init_agent_state, **args, stream_mode=["values", "updates"]
+            ):
+                if mode == "values":
+                    final_state = chunk
+                else:  # "updates": {node_name: state_delta}
+                    for node_name in chunk:
+                        # LangGraph injects "__metadata__" into the updates
+                        # dict when a cached checkpoint node is replayed
+                        # (langgraph 1.2.0 _io.py:172). Skip dunder keys so
+                        # they don't leak into the live monitor's [node] log.
+                        if node_name.startswith("__"):
+                            continue
+                        try:
+                            progress_callback(node_name)
+                        except Exception:  # noqa: BLE001
+                            # Callback failures must not abort the graph run —
+                            # the dashboard log is a best-effort signal.
+                            logger.exception(
+                                "progress_callback failed for node %s", node_name
+                            )
+            if final_state is None:
+                # Defensive fallback: if no "values" chunk arrived (shouldn't
+                # happen with the modes above), make sure we still return a
+                # usable state rather than crashing downstream consumers.
+                final_state = self.graph.invoke(init_agent_state, **args)
+        elif self.debug:
             trace = []
             for chunk in self.graph.stream(init_agent_state, **args):
                 if len(chunk["messages"]) == 0:
