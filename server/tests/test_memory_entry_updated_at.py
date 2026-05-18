@@ -3,7 +3,7 @@ auto-refresh on every ORM UPDATE so callers cannot leave the timestamp
 stale by forgetting to set it. See dashboard wave 3 deferred items."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -15,7 +15,7 @@ from app.models.user import User
 async def test_updated_at_auto_refreshes_on_orm_update(db_session):
     uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-updated-at"))
-    past = datetime(2000, 1, 1)
+    past = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
     entry = MemoryEntry(
         id=uuid.uuid4(),
@@ -36,7 +36,15 @@ async def test_updated_at_auto_refreshes_on_orm_update(db_session):
     await db_session.commit()
     await db_session.refresh(entry)
 
-    assert entry.updated_at > past, (
+    # SQLAlchemy returns naive datetimes from aiosqlite (DateTime(timezone=True)
+    # is lossy on SQLite) and tz-aware from asyncpg. Interpret naive values as
+    # UTC — that matches the codebase convention where all stored timestamps
+    # are written via datetime.now(timezone.utc).
+    actual = entry.updated_at
+    if actual.tzinfo is None:
+        actual = actual.replace(tzinfo=timezone.utc)
+
+    assert actual > past, (
         f"updated_at did not auto-refresh on ORM update — "
         f"still {entry.updated_at!r}, expected > {past!r}. "
         f"Add onupdate=func.now() to MemoryEntry.updated_at."
