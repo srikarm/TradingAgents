@@ -18,20 +18,17 @@ export default async function LaunchPage() {
           description="Spin up the full multi-agent pipeline — analysts, research debate, trader, risk team, portfolio manager."
         />
 
-        {/* Form column constrained to a readable measure (3xl) but anchored
-         * to the LEFT of the 7xl container — matches the flush-left content
-         * rhythm of /history, /live, /portfolio. */}
-        <div className="max-w-3xl">
-          <div className="mb-8 flex items-start gap-3 rounded-xl border border-info/20 bg-info/[0.04] p-4 text-sm backdrop-blur-sm">
-            <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-info" aria-hidden />
-            <p className="leading-relaxed text-fg-muted">
-              The worker uses LLM provider credentials configured on the server. Per-user keys
-              land in a future release.
-            </p>
-          </div>
-
-          <LaunchForm />
+        {/* Info banner spans the full container width — matches the
+         * full-width content rhythm of /history rows and /portfolio cards. */}
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-info/20 bg-info/[0.04] p-4 text-sm backdrop-blur-sm">
+          <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-info" aria-hidden />
+          <p className="leading-relaxed text-fg-muted">
+            The worker uses LLM provider credentials configured on the server. Per-user keys
+            land in a future release.
+          </p>
         </div>
+
+        <LaunchForm />
       </main>
     </>
   );
