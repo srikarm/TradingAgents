@@ -14,7 +14,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session_factory
@@ -230,11 +229,20 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
                     await session.execute(select(Run).where(Run.id == run_id))
                 ).scalar_one_or_none()
                 if run_for_mirror is not None:
-                    await _memory_mirror_sync(
+                    mirror_count = await _memory_mirror_sync(
                         session,
                         dashboard_dir=settings.dashboard_data_dir,
                         user_id=run_for_mirror.user_id,
                     )
+                    if mirror_count == 0:
+                        # Either lock was held by a concurrent sync (warning
+                        # already logged from sync_user) or disk had no
+                        # entries. Surface run_id so operators can grep.
+                        logger.warning(
+                            "memory_mirror post-run sync produced 0 entries "
+                            "for run_id=%s user_id=%s",
+                            run_id, run_for_mirror.user_id,
+                        )
         except Exception:  # noqa: BLE001
             logger.exception("memory_mirror sync failed for run_id=%s", run_id)
 
