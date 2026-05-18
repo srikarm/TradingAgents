@@ -82,7 +82,7 @@ async def test_orphan_sweeper_ignores_terminal_runs(db_session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_orphan_sweeper_marks_stale_queued_as_failed(db_session, monkeypatch):
-    """Spec §4: a QUEUED run whose created_at is older than
+    """Spec §3: a QUEUED run whose created_at is older than
     queued_threshold_seconds must be marked FAILED with
     error_summary='never_picked_up'. last_heartbeat_at stays NULL."""
     monkeypatch.setattr(worker_tasks, "_session_factory_for_worker",

@@ -250,7 +250,7 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
 async def orphan_sweeper(ctx: dict) -> None:
     """Cron: mark stale RUNNING + stale QUEUED rows as failed.
 
-    Two parallel sweeps, one transaction:
+    Two sequential sweeps in one transaction:
     - RUNNING: heartbeat older than orphan_threshold_seconds → worker
       died mid-run. Marked FAILED with error_summary='worker_lost'.
     - QUEUED:  created_at older than queued_threshold_seconds → worker
