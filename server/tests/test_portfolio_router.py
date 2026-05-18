@@ -30,7 +30,7 @@ def client(db_session, monkeypatch):
 
 
 def _add_entry(session, *, user_id, ticker, trade_date, rating,
-               raw=None, status=MemoryEntryStatus.RESOLVED):
+               raw=0.0, status=MemoryEntryStatus.RESOLVED):
     e = MemoryEntry(
         id=uuid.uuid4(),
         user_id=user_id,
@@ -129,6 +129,9 @@ async def test_curve_ignores_pending_entries(client, db_session):
     db_session.add(User(id=uid, github_id="gh-pp"))
     _add_entry(db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-09",
                rating="Buy", raw=0.02)
+    # PENDING entries legitimately have raw=None — the
+    # ck_memory_entry_resolved_has_raw_return constraint only fires when
+    # status='RESOLVED'. Helper default raw=0.0 is for RESOLVED entries.
     _add_entry(db_session, user_id=uid, ticker="AAPL", trade_date="2024-05-10",
                rating="Hold", raw=None, status=MemoryEntryStatus.PENDING)
     await db_session.flush()

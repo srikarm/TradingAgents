@@ -1,9 +1,11 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
+from app.models.memory_entry import MemoryEntry, MemoryEntryStatus
 from app.models.run import Run, RunStatus
 from app.models.user import User
 
@@ -41,18 +43,13 @@ async def test_run_insert_and_query(db_session):
 
 # ---- MemoryEntry tests ----
 
-import uuid as _uuid2
-from datetime import timezone
-
-from app.models.memory_entry import MemoryEntry, MemoryEntryStatus
-
 
 @pytest.mark.asyncio
 async def test_memory_entry_round_trips_pending(db_session):
-    uid = _uuid2.uuid4()
+    uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-me1"))
     entry = MemoryEntry(
-        id=_uuid2.uuid4(),
+        id=uuid.uuid4(),
         user_id=uid,
         ticker="NVDA",
         trade_date="2024-05-10",
@@ -75,10 +72,10 @@ async def test_memory_entry_round_trips_pending(db_session):
 
 @pytest.mark.asyncio
 async def test_memory_entry_round_trips_resolved(db_session):
-    uid = _uuid2.uuid4()
+    uid = uuid.uuid4()
     db_session.add(User(id=uid, github_id="gh-me2"))
     entry = MemoryEntry(
-        id=_uuid2.uuid4(),
+        id=uuid.uuid4(),
         user_id=uid,
         ticker="NVDA",
         trade_date="2024-05-10",
@@ -98,3 +95,30 @@ async def test_memory_entry_round_trips_resolved(db_session):
     assert found.status is MemoryEntryStatus.RESOLVED
     assert found.raw_return == pytest.approx(0.023)
     assert found.holding_days == 7
+
+
+@pytest.mark.asyncio
+async def test_resolved_without_raw_return_rejected(db_session):
+    """ck_memory_entry_resolved_has_raw_return enforces the invariant:
+    status=RESOLVED ⟹ raw_return IS NOT NULL.
+    """
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-ck"))
+    await db_session.flush()
+
+    db_session.add(
+        MemoryEntry(
+            id=uuid.uuid4(),
+            user_id=uid,
+            ticker="NVDA",
+            trade_date="2024-05-09",
+            rating="Buy",
+            status=MemoryEntryStatus.RESOLVED,
+            raw_return=None,
+            alpha_return=None,
+            holding_days=None,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        await db_session.flush()

@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     Float,
@@ -27,6 +28,14 @@ class MemoryEntry(Base):
     __table_args__ = (
         UniqueConstraint(
             "user_id", "ticker", "trade_date", name="uq_memory_entry_user_ticker_date"
+        ),
+        # 'RESOLVED' uppercase: SQLAlchemy's `Enum(MemoryEntryStatus, ...)` stores
+        # members by .name (uppercase), not .value (lowercase), on BOTH Postgres
+        # and SQLite (default `values_callable` uses e.name). Writing 'resolved'
+        # (the Pydantic-side value) would silently always-allow on every dialect.
+        CheckConstraint(
+            "status != 'RESOLVED' OR raw_return IS NOT NULL",
+            name="ck_memory_entry_resolved_has_raw_return",
         ),
     )
 
