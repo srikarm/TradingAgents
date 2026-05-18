@@ -120,3 +120,26 @@ async def test_fetch_prices_isolates_users(tmp_path, monkeypatch):
     assert cache_a.is_file()
     assert cache_b.is_file()
     assert cache_a != cache_b
+
+
+def test_df_to_points_preserves_wall_clock_date_on_tz_aware_index():
+    """v3+ followup #6: yfinance returns tz-aware DatetimeIndex (US/Eastern
+    for US markets). `_df_to_points` must key bars by the wall-clock trading
+    date in the index's timezone, NOT by UTC date — a midnight ET timestamp
+    must serialize as the ET date, not slide back to the prior UTC day.
+
+    Was previously untested; covers the tz-aware path that the old
+    `tz_localize(None)` strip used to walk through.
+    """
+    idx = pd.DatetimeIndex(
+        ["2024-05-09 00:00:00", "2024-05-10 00:00:00"],
+        tz="US/Eastern",
+    )
+    df = pd.DataFrame({"Close": [100.0, 102.5]}, index=idx)
+
+    points = price_cache._df_to_points(df)
+
+    assert points == [
+        {"trade_date": "2024-05-09", "close": 100.0},
+        {"trade_date": "2024-05-10", "close": 102.5},
+    ]
