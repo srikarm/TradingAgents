@@ -8,6 +8,16 @@ from __future__ import annotations
 from arq.cron import cron
 
 from app.config import get_settings
+
+# Register every ORM model with Base.metadata BEFORE the worker issues any
+# flush. `tasks.py` writes to `runs`, whose user_id FK points at `users`;
+# without User imported, SQLAlchemy raises NoReferencedTableError on the
+# first commit. memory_mirror writes to memory_entries during the post-run
+# sync. The api process gets this for free via router loading; the worker
+# entry point has to be explicit.
+from app.models import memory_entry as _memory_entry  # noqa: F401
+from app.models import run as _run  # noqa: F401
+from app.models import user as _user  # noqa: F401
 from app.services.redis_pool import get_redis_settings
 from app.workers.tasks import orphan_sweeper, run_propagate
 
