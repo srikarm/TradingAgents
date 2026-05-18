@@ -1,3 +1,5 @@
+import type { components } from "@/lib/openapi-types";
+
 export type RunStatus = "queued" | "running" | "succeeded" | "failed";
 
 export interface RunOut {
@@ -52,42 +54,26 @@ export interface RunTailOut {
   status: RunStatus;
 }
 
-// --- Wave 3: portfolio ---
+// --- Wave 3: portfolio — generated from FastAPI Pydantic schemas ---
+//
+// These 7 types are re-exported from web/lib/openapi-types.ts. Do NOT
+// hand-edit them here. After changing a Pydantic schema in
+// server/app/schemas/portfolio.py, run `npm run codegen` to regenerate
+// the openapi-types.ts file; the re-exports below pick up FIELD changes
+// automatically. `npm run codegen:check` fails if the committed
+// openapi-types.ts is stale relative to the current Pydantic schemas.
+//
+// When a NEW Pydantic schema is added (not just a new field on an
+// existing one), also add a corresponding `export type X = ...` line
+// below — codegen alone won't surface it via the friendly-name wrapper.
+//
+// Other types in this file (RunStatus, RunOut, etc.) remain
+// hand-defined until their Pydantic counterparts are migrated.
 
-export type MemoryEntryStatus = "pending" | "resolved";
-
-export interface PortfolioSummaryOut {
-  trade_count: number;
-  win_rate: number;
-  sharpe: number;
-  max_drawdown: number;
-  /** Sum of per-decision P&L; same units as PnLPoint.cumulative_pnl. */
-  cumulative_pnl: number;
-}
-
-export interface PnLPoint {
-  trade_date: string;
-  cumulative_pnl: number;
-}
-
-export interface PortfolioCurveOut {
-  points: PnLPoint[];
-}
-
-export interface PricePoint {
-  trade_date: string;
-  close: number;
-}
-
-export interface DecisionPin {
-  trade_date: string;
-  rating: string;
-  status: MemoryEntryStatus;
-  raw_return: number | null;
-}
-
-export interface TickerDetailOut {
-  ticker: string;
-  prices: PricePoint[];
-  decisions: DecisionPin[];
-}
+export type MemoryEntryStatus = components["schemas"]["MemoryEntryStatus"];
+export type PortfolioSummaryOut = components["schemas"]["PortfolioSummaryOut"];
+export type PnLPoint = components["schemas"]["PnLPoint"];
+export type PortfolioCurveOut = components["schemas"]["PortfolioCurveOut"];
+export type PricePoint = components["schemas"]["PricePoint"];
+export type DecisionPin = components["schemas"]["DecisionPin"];
+export type TickerDetailOut = components["schemas"]["TickerDetailOut"];
