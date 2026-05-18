@@ -222,7 +222,7 @@ async def sync_user(
             existing.holding_days = holding
             existing.decision_text = decision
             existing.reflection_text = reflection
-            existing.updated_at = now
+            # updated_at auto-refreshes via MemoryEntry.updated_at onupdate
         processed += 1
 
     await session.commit()
