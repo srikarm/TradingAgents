@@ -20,7 +20,7 @@ import os
 # connections or verify JWTs.
 os.environ.setdefault("NEXTAUTH_SECRET", "codegen-placeholder-not-for-runtime-xxxx")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("DASHBOARD_DATA_DIR", "/tmp/codegen-placeholder")  # noqa: S108
+os.environ.setdefault("DASHBOARD_DATA_DIR", "/tmp/codegen-placeholder")  # noqa: S108 — placeholder; never used at runtime (script makes no fs calls)
 
 from app.main import app  # noqa: E402 — imports MUST follow env setdefault
 
