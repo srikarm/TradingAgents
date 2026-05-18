@@ -221,3 +221,6 @@ __marimo__/
 
 # Brainstorming / superpowers session artifacts
 .superpowers/
+
+# OpenAPI codegen intermediate (web/lib/openapi-types.ts is the committed output).
+server/openapi.json
