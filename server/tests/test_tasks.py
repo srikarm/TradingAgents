@@ -132,7 +132,7 @@ import time as _time
 class SlowGraph(StubGraph):
     """Stub that blocks long enough for ≥2 heartbeat ticks at a short interval."""
 
-    def propagate(self, company_name, trade_date):
+    def propagate(self, company_name, trade_date, *, progress_callback=None):
         results = Path(self.config["results_dir"]) / company_name / trade_date
         (results / "reports" / "1_analysts").mkdir(parents=True, exist_ok=True)
         (results / "reports" / "1_analysts" / "market.md").write_text("# market")
