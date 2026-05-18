@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 MemoryEntryStatusLiteral = Literal["pending", "resolved"]
 
@@ -15,6 +15,15 @@ class MemoryEntryOut(BaseModel):
     holding_days: int | None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _pending_requires_null_raw(self) -> "MemoryEntryOut":
+        if self.status == "pending" and self.raw_return is not None:
+            raise ValueError(
+                f"MemoryEntryOut invariant violated: status='pending' requires "
+                f"raw_return=None, got {self.raw_return!r}"
+            )
+        return self
 
 
 class PnLPoint(BaseModel):
@@ -46,6 +55,15 @@ class DecisionPin(BaseModel):
     rating: str
     status: MemoryEntryStatusLiteral
     raw_return: float | None
+
+    @model_validator(mode="after")
+    def _pending_requires_null_raw(self) -> "DecisionPin":
+        if self.status == "pending" and self.raw_return is not None:
+            raise ValueError(
+                f"DecisionPin invariant violated: status='pending' requires "
+                f"raw_return=None, got {self.raw_return!r}"
+            )
+        return self
 
 
 class TickerDetailOut(BaseModel):
