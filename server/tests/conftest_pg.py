@@ -3,9 +3,10 @@
 Boots a single throwaway Postgres container per pytest session (via
 testcontainers-python). Exposes an async engine so individual tests can
 build their own session factories — the concurrent test in
-test_memory_mirror_concurrent_pg.py needs two separate sessions on two
-separate connections (advisory locks are connection-scoped; a single
-session can't deadlock against itself).
+test_memory_mirror_concurrent_pg.py needs two separate sessions because
+the xact-variant advisory lock is transaction-scoped, and one session
+provides only one active transaction. Two coroutines sharing a single
+session would share one transaction and never contend with each other.
 
 Default `pytest` deselects the `pg` marker; run with `pytest -m pg` to
 include these tests. Requires Docker.
@@ -41,10 +42,14 @@ async def pg_engine(pg_container):
     if async_url == sync_url:  # fallback for older testcontainers that return plain postgresql://
         async_url = sync_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+    # pool_size must be >= the number of concurrent sync_user calls a single
+    # test makes (currently 2 for the race test) so both coroutines can have
+    # their lock SELECT in flight at the same time. Otherwise B might block
+    # on connection acquisition until A commits, hiding the race.
     engine = create_async_engine(async_url, pool_size=4, max_overflow=2)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         yield engine
     finally:
         try:

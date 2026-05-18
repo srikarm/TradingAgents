@@ -60,11 +60,11 @@ async def test_concurrent_sync_serializes_via_advisory_lock(
 
     factory = async_sessionmaker(pg_engine, expire_on_commit=False)
 
-    async def one_sync() -> int | BaseException:
+    async def one_sync() -> int | Exception:
         async with factory() as s:
             try:
                 return await sync_user(s, dashboard_dir=tmp_path, user_id=uid)
-            except BaseException as e:  # noqa: BLE001 -- test wants to see ANY failure
+            except Exception as e:  # noqa: BLE001 -- test wants to see ANY failure
                 return e
 
     a, b = await asyncio.gather(one_sync(), one_sync())
@@ -73,13 +73,13 @@ async def test_concurrent_sync_serializes_via_advisory_lock(
     # N entries; the other sees the lock held and returns 0.
     # RED expectation (no lock): one returns N, the other raises
     # IntegrityError on commit due to uq_memory_entry_user_ticker_date.
-    assert not isinstance(a, BaseException), f"sync_user raised: {a!r}"
-    assert not isinstance(b, BaseException), f"sync_user raised: {b!r}"
+    assert not isinstance(a, Exception), f"sync_user raised: {a!r}"
+    assert not isinstance(b, Exception), f"sync_user raised: {b!r}"
     assert sorted([a, b]) == [0, N_ENTRIES], (
         f"expected one sync to win (returned {N_ENTRIES}) and one to skip "
         f"(returned 0); got {a=} {b=}. If both are {N_ENTRIES}, the lock "
         f"is not preventing the race. If one is an exception, the test's "
-        f"BaseException guard failed."
+        f"Exception guard failed."
     )
 
     # The skipped caller logged the expected warning.

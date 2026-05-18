@@ -48,10 +48,23 @@ async def _try_acquire(session: AsyncSession, user_id: uuid.UUID) -> bool:
     Returns True on Postgres if the lock is acquired (or always True on
     non-Postgres dialects — the lock is a no-op for SQLite test runs).
     The lock auto-releases on COMMIT / ROLLBACK.
+
+    Falls open (returns True) if dialect detection fails — i.e., session.bind
+    or bind.dialect resolves to None. That's unexpected in production
+    (sessions always come from `async_sessionmaker(engine)`), so a WARNING
+    is logged so operators see the silent lock bypass.
     """
     bind = getattr(session, "bind", None)
     dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
     if dialect_name != "postgresql":
+        if dialect_name is None:
+            # bind missing or dialect unidentifiable — production misconfig.
+            # SQLite test path has dialect_name='sqlite' so this never fires there.
+            logger.warning(
+                "memory_mirror _try_acquire: dialect detection failed "
+                "(session.bind=%r) for user_id=%s — proceeding without lock",
+                bind, user_id,
+            )
         return True
     # CAST(... AS integer) pins the (int4, int4) overload of
     # pg_try_advisory_xact_lock without colliding with SQLAlchemy text()'s
