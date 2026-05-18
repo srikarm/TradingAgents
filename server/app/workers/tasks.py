@@ -248,23 +248,50 @@ async def run_propagate(ctx: dict, run_id_str: str) -> None:
 
 
 async def orphan_sweeper(ctx: dict) -> None:
-    """Cron: mark `running` rows whose heartbeat is older than threshold as failed."""
+    """Cron: mark stale RUNNING + stale QUEUED rows as failed.
+
+    Two parallel sweeps, one transaction:
+    - RUNNING: heartbeat older than orphan_threshold_seconds → worker
+      died mid-run. Marked FAILED with error_summary='worker_lost'.
+    - QUEUED:  created_at older than queued_threshold_seconds → worker
+      never picked it up. Marked FAILED with error_summary='never_picked_up'.
+
+    The two summaries are distinguishable so operators can triage:
+    'worker_lost' points at process/OOM/segfault investigation;
+    'never_picked_up' points at arq/Redis/worker-registration.
+    """
     settings = get_settings()
-    threshold = datetime.now(timezone.utc) - timedelta(
-        seconds=settings.orphan_threshold_seconds
-    )
+    now = datetime.now(timezone.utc)
+    running_threshold = now - timedelta(seconds=settings.orphan_threshold_seconds)
+    queued_threshold = now - timedelta(seconds=settings.queued_threshold_seconds)
     async with _session_factory_for_worker() as session:
-        result = await session.execute(
+        running_result = await session.execute(
             update(Run)
             .where(
                 Run.status == RunStatus.RUNNING,
-                Run.last_heartbeat_at < threshold,
+                Run.last_heartbeat_at < running_threshold,
             )
             .values(
                 status=RunStatus.FAILED,
                 error_summary="worker_lost",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=now,
+            )
+        )
+        queued_result = await session.execute(
+            update(Run)
+            .where(
+                Run.status == RunStatus.QUEUED,
+                Run.created_at < queued_threshold,
+            )
+            .values(
+                status=RunStatus.FAILED,
+                error_summary="never_picked_up",
+                completed_at=now,
             )
         )
         await session.commit()
-        logger.info("orphan_sweeper: marked %d run(s) failed", result.rowcount)
+        logger.info(
+            "orphan_sweeper: marked %d stuck-running + %d stuck-queued run(s) failed",
+            running_result.rowcount,
+            queued_result.rowcount,
+        )
