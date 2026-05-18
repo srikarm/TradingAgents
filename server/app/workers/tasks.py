@@ -71,8 +71,9 @@ def _append_log(path: Path, message: str) -> None:
 def _persist_reports(run_path: Path, final_state: dict) -> None:
     """Write the markdown reports from final_state to disk.
 
-    Mirrors the layout used by cli/main.py:save_report_to_disk so the
-    existing GET /runs/{id} endpoint can read them via load_report_sections.
+    Mirrors the layout used by tradingagents.reports.save_report_to_disk
+    so the existing GET /runs/{id} endpoint can read them via
+    load_report_sections.
     """
     reports = run_path / "reports"
     reports.mkdir(parents=True, exist_ok=True)
