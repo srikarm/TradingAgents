@@ -384,6 +384,12 @@ class TradingAgentsGraph:
                     final_state = chunk
                 else:  # "updates": {node_name: state_delta}
                     for node_name in chunk:
+                        # LangGraph injects "__metadata__" into the updates
+                        # dict when a cached checkpoint node is replayed
+                        # (langgraph 1.2.0 _io.py:172). Skip dunder keys so
+                        # they don't leak into the live monitor's [node] log.
+                        if node_name.startswith("__"):
+                            continue
                         try:
                             progress_callback(node_name)
                         except Exception:  # noqa: BLE001
