@@ -264,34 +264,48 @@ async def orphan_sweeper(ctx: dict) -> None:
     now = datetime.now(timezone.utc)
     running_threshold = now - timedelta(seconds=settings.orphan_threshold_seconds)
     queued_threshold = now - timedelta(seconds=settings.queued_threshold_seconds)
-    async with _session_factory_for_worker() as session:
-        running_result = await session.execute(
-            update(Run)
-            .where(
-                Run.status == RunStatus.RUNNING,
-                Run.last_heartbeat_at < running_threshold,
+    try:
+        async with _session_factory_for_worker() as session:
+            running_result = await session.execute(
+                update(Run)
+                .where(
+                    Run.status == RunStatus.RUNNING,
+                    Run.last_heartbeat_at < running_threshold,
+                )
+                .values(
+                    status=RunStatus.FAILED,
+                    error_summary="worker_lost",
+                    completed_at=now,
+                )
             )
-            .values(
-                status=RunStatus.FAILED,
-                error_summary="worker_lost",
-                completed_at=now,
+            queued_result = await session.execute(
+                update(Run)
+                .where(
+                    Run.status == RunStatus.QUEUED,
+                    Run.created_at < queued_threshold,
+                )
+                .values(
+                    status=RunStatus.FAILED,
+                    error_summary="never_picked_up",
+                    completed_at=now,
+                )
             )
-        )
-        queued_result = await session.execute(
-            update(Run)
-            .where(
-                Run.status == RunStatus.QUEUED,
-                Run.created_at < queued_threshold,
-            )
-            .values(
-                status=RunStatus.FAILED,
-                error_summary="never_picked_up",
-                completed_at=now,
-            )
-        )
-        await session.commit()
-        logger.info(
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        # Surface DB failures on the app.workers.tasks logger with
+        # orphan_sweeper context — arq's framework-level logger names the
+        # cron but doesn't tell an operator watching the app log what failed.
+        # Re-raise so arq still marks the cron tick failed for its accounting.
+        logger.exception("orphan_sweeper: DB sweep failed")
+        raise
+
+    running_n = running_result.rowcount
+    queued_n = queued_result.rowcount
+    if running_n or queued_n:
+        logger.warning(
             "orphan_sweeper: marked %d stuck-running + %d stuck-queued run(s) failed",
-            running_result.rowcount,
-            queued_result.rowcount,
+            running_n,
+            queued_n,
         )
+    else:
+        logger.debug("orphan_sweeper: no stale runs found")
