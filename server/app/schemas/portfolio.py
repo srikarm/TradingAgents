@@ -1,15 +1,13 @@
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, model_validator
 
-MemoryEntryStatusLiteral = Literal["pending", "resolved"]
+from app.models.memory_entry import MemoryEntryStatus
 
 
 class MemoryEntryOut(BaseModel):
     ticker: str
     trade_date: str
     rating: str
-    status: MemoryEntryStatusLiteral
+    status: MemoryEntryStatus
     raw_return: float | None
     alpha_return: float | None
     holding_days: int | None
@@ -67,7 +65,7 @@ class DecisionPin(BaseModel):
     # would silently fail with a ValidationError.
     trade_date: str
     rating: str
-    status: MemoryEntryStatusLiteral
+    status: MemoryEntryStatus
     raw_return: float | None
 
     @model_validator(mode="after")

@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.models.memory_entry import MemoryEntryStatus
 from app.schemas.portfolio import (
     DecisionPin,
     MemoryEntryOut,
@@ -126,3 +127,21 @@ def test_decision_pin_rejects_pending_with_zero_raw_return():
             status="pending",
             raw_return=0.0,
         )
+
+
+def test_memory_entry_out_accepts_enum_input():
+    """Both string ("pending") and MemoryEntryStatus enum member inputs
+    must work after v3+ #4 swaps the field type. Guards against a future
+    Pydantic config regression that breaks enum-typed field validation.
+    """
+    e = MemoryEntryOut(
+        ticker="NVDA",
+        trade_date="2024-05-10",
+        rating="Buy",
+        status=MemoryEntryStatus.RESOLVED,
+        raw_return=0.023,
+        alpha_return=0.011,
+        holding_days=7,
+    )
+    assert e.status == "resolved"  # str-enum equality
+    assert e.status is MemoryEntryStatus.RESOLVED
