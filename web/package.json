@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "codegen": "uv --directory ../server run python -m app.export_openapi > ../server/openapi.json && npx openapi-typescript ../server/openapi.json -o lib/openapi-types.ts",
-    "codegen:check": "uv --directory ../server run python -m app.export_openapi > /tmp/openapi-check.json && npx openapi-typescript /tmp/openapi-check.json -o /tmp/openapi-types-check.ts && diff lib/openapi-types.ts /tmp/openapi-types-check.ts && rm -f /tmp/openapi-check.json /tmp/openapi-types-check.ts"
+    "codegen:check": "uv --directory ../server run python -m app.export_openapi > /tmp/openapi-check.json && npx openapi-typescript /tmp/openapi-check.json -o /tmp/openapi-types-check.ts; diff lib/openapi-types.ts /tmp/openapi-types-check.ts; rc=$?; rm -f /tmp/openapi-check.json /tmp/openapi-types-check.ts; exit $rc"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
