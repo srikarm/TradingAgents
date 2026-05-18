@@ -20,20 +20,28 @@ class StubGraph:
     test fails loudly instead of silently accepting the extra arg.
     """
 
+    # Node names the stub pretends to execute; matches the real graph's
+    # analyst tier so a test can assert these specific names land in the log.
+    NODES = ("market_analyst", "social_analyst", "news_analyst", "fundamentals_analyst")
+
     def __init__(self, *, selected_analysts, config, **_kwargs):
         self.config = config
         self.selected_analysts = selected_analysts
 
-    def propagate(self, company_name, trade_date):
-        # No asset_type param: production code at tasks.py:run_propagate
-        # calls `graph.propagate(ticker, trade_date)` — no asset_type.
-        # If that changes, the stub must change too.
+    def propagate(self, company_name, trade_date, *, progress_callback=None):
+        # `progress_callback` mirrors the production signature added for v3+ #9.
+        # If the production call site stops passing it, this stub's `[node]`
+        # lines will stop appearing in the log and the per-node-progress test
+        # below will fail loudly.
         results = Path(self.config["results_dir"]) / company_name / trade_date
         (results / "reports" / "1_analysts").mkdir(parents=True, exist_ok=True)
         (results / "reports" / "1_analysts" / "market.md").write_text("# market")
         (results / "reports" / "final_trade_decision.md").write_text("# final\n\n**Rating**: Buy")
         log = results / "message_tool.log"
         log.write_text("step 1\nstep 2\n")
+        if progress_callback is not None:
+            for node_name in self.NODES:
+                progress_callback(node_name)
         return {"market_report": "# market", "final_trade_decision": "# final"}, "Buy"
 
 
@@ -240,6 +248,45 @@ async def test_run_propagate_invokes_memory_mirror_on_success(
     assert len(calls) == 1
     _dir, called_uid = calls[0]
     assert called_uid == uid
+
+
+@pytest.mark.asyncio
+async def test_run_propagate_writes_per_node_progress_to_log(
+    db_session, tmp_path, monkeypatch
+):
+    """v3+ followup #9: run_propagate must pass a progress_callback to
+    graph.propagate() so each LangGraph node transition writes a `[node] X`
+    line to message_tool.log — the live monitor then shows actual graph
+    activity instead of just heartbeat ticks between [start] and [completed].
+    """
+    monkeypatch.setattr(worker_tasks, "_graph_factory", lambda **kw: StubGraph(**kw))
+    monkeypatch.setattr(
+        worker_tasks, "_session_factory_for_worker", _factory_yielding(db_session)
+    )
+
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-stream"))
+    run_id = uuid.uuid4()
+    db_session.add(
+        Run(
+            id=run_id,
+            user_id=uid,
+            ticker="NVDA",
+            trade_date="2024-05-10",
+            status=RunStatus.QUEUED,
+            results_path=str(tmp_path / "NVDA" / "2024-05-10"),
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+
+    await worker_tasks.run_propagate({"redis": MagicMock()}, str(run_id))
+
+    log_text = (tmp_path / "NVDA" / "2024-05-10" / "message_tool.log").read_text()
+    for node_name in StubGraph.NODES:
+        assert f"[node] {node_name}" in log_text, (
+            f"expected [node] {node_name} in message_tool.log; got:\n{log_text}"
+        )
 
 
 @pytest.mark.asyncio
