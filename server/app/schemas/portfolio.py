@@ -1,5 +1,11 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
+# Status values live in app.models.memory_entry.MemoryEntryStatus — the enum
+# is the single source of truth. Schemas-importing-from-models is acceptable
+# here because MemoryEntryStatus is a str-Enum (pure data type) with no
+# SQLAlchemy / DB dependencies; no circular-import risk.
+# If a new status is ever added, update only MemoryEntryStatus — do NOT
+# re-introduce a `MemoryEntryStatusLiteral = Literal[...]` alias here.
 from app.models.memory_entry import MemoryEntryStatus
 
 

@@ -130,9 +130,16 @@ def test_decision_pin_rejects_pending_with_zero_raw_return():
 
 
 def test_memory_entry_out_accepts_enum_input():
-    """Both string ("pending") and MemoryEntryStatus enum member inputs
-    must work after v3+ #4 swaps the field type. Guards against a future
-    Pydantic config regression that breaks enum-typed field validation.
+    """Enum-member input (MemoryEntryStatus.RESOLVED) must be accepted and
+    preserved as an identity-equal enum member after PR #7 swapped the
+    field type from Literal["pending","resolved"] to MemoryEntryStatus.
+    String coercion is covered by test_memory_entry_out_accepts_resolved.
+
+    The `is` identity assertion is load-bearing: with the old Literal
+    field, Pydantic coerced enum input to plain str and `is` failed.
+    With the enum field, identity is preserved. A future Pydantic config
+    regression (e.g., use_enum_values=True) would also fail the `is`
+    check and be caught here.
     """
     e = MemoryEntryOut(
         ticker="NVDA",
@@ -145,3 +152,18 @@ def test_memory_entry_out_accepts_enum_input():
     )
     assert e.status == "resolved"  # str-enum equality
     assert e.status is MemoryEntryStatus.RESOLVED
+
+
+def test_decision_pin_accepts_enum_input():
+    """Mirror of test_memory_entry_out_accepts_enum_input for DecisionPin.
+    Both schemas got the same Literal→MemoryEntryStatus swap; both need
+    the identity-preservation contract pinned.
+    """
+    pin = DecisionPin(
+        trade_date="2024-05-10",
+        rating="Buy",
+        status=MemoryEntryStatus.PENDING,
+        raw_return=None,
+    )
+    assert pin.status == "pending"  # str-enum equality
+    assert pin.status is MemoryEntryStatus.PENDING
