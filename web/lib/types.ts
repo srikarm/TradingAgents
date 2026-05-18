@@ -59,13 +59,16 @@ export interface RunTailOut {
 // These 7 types are re-exported from web/lib/openapi-types.ts. Do NOT
 // hand-edit them here. After changing a Pydantic schema in
 // server/app/schemas/portfolio.py, run `npm run codegen` to regenerate
-// the openapi-types.ts file; the re-exports below pick up changes
+// the openapi-types.ts file; the re-exports below pick up FIELD changes
 // automatically. `npm run codegen:check` fails if the committed
 // openapi-types.ts is stale relative to the current Pydantic schemas.
 //
+// When a NEW Pydantic schema is added (not just a new field on an
+// existing one), also add a corresponding `export type X = ...` line
+// below — codegen alone won't surface it via the friendly-name wrapper.
+//
 // Other types in this file (RunStatus, RunOut, etc.) remain
 // hand-defined until their Pydantic counterparts are migrated.
-// The `components` import is at the top of the file (line 1).
 
 export type MemoryEntryStatus = components["schemas"]["MemoryEntryStatus"];
 export type PortfolioSummaryOut = components["schemas"]["PortfolioSummaryOut"];
