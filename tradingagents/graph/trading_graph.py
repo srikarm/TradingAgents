@@ -376,9 +376,13 @@ class TradingAgentsGraph:
             # Stream once with both modes so we get node names ("updates") AND
             # the cumulative final state ("values") without invoking twice.
             # LangGraph 1.x yields (mode, chunk) tuples in this configuration.
+            # propagator.get_graph_args() ships a default "stream_mode": "values"
+            # for the debug branch — strip it here so we don't pass the kwarg
+            # twice (Python raises "got multiple values for keyword argument").
+            stream_args = {k: v for k, v in args.items() if k != "stream_mode"}
             final_state = None
             for mode, chunk in self.graph.stream(
-                init_agent_state, **args, stream_mode=["values", "updates"]
+                init_agent_state, **stream_args, stream_mode=["values", "updates"]
             ):
                 if mode == "values":
                     final_state = chunk
