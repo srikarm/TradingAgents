@@ -32,6 +32,7 @@ def test_memory_entry_out_accepts_pending_with_nulls():
         raw_return=None, alpha_return=None, holding_days=None,
     )
     assert e.status == "pending"
+    assert e.raw_return is None  # invariant: pending ⟹ raw_return is None
 
 
 def test_portfolio_summary_shape():
