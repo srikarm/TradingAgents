@@ -175,8 +175,8 @@ export default function LaunchForm() {
           className={cn(
             "group relative inline-flex h-11 items-center justify-center gap-2 overflow-hidden rounded-lg px-6 text-sm font-semibold text-brand-fg transition-all sm:min-w-[200px]",
             "bg-gradient-to-b from-brand to-[rgb(192,40,32)]",
-            "shadow-[0_1px_0_0_rgba(255,255,255,0.12)_inset,0_8px_24px_-8px_rgb(var(--brand)/0.5)]",
-            "hover:from-[rgb(255,80,72)] hover:to-brand hover:shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_12px_32px_-8px_rgb(var(--brand)/0.7)]",
+            "shadow-[0_1px_0_0_rgba(255,255,255,0.12)_inset,0_8px_24px_-8px_rgb(var(--brand)_/_0.5)]",
+            "hover:from-[rgb(255,80,72)] hover:to-brand hover:shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_12px_32px_-8px_rgb(var(--brand)_/_0.7)]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
             "disabled:cursor-wait disabled:opacity-60"
           )}

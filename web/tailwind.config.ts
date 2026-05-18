@@ -28,9 +28,6 @@ export default {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
       },
-      boxShadow: {
-        glow: "0 0 20px -4px rgb(var(--brand) / 0.5)",
-      },
       animation: {
         "fade-in": "fadeIn 200ms ease-out",
         "pulse-soft": "pulseSoft 2s ease-in-out infinite",

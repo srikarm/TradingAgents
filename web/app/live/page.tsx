@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Activity, PlayCircle } from "lucide-react";
+// Link is still used for the page-header action + EmptyState action below.
 import { auth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import Nav from "@/components/Nav";
@@ -64,9 +65,12 @@ export default async function LivePage() {
           ) : (
             <div className="flex flex-col gap-2 animate-fade-in">
               {active.map((r) => (
-                <Link key={r.id} href={`/live/${r.id}`} className="block">
-                  <RunCard run={r} />
-                </Link>
+                // RunCard renders its own <Link>; we override the href so the
+                // card navigates to /live/{id} for in-progress runs instead
+                // of /history/{id}. Wrapping the card in another <Link> here
+                // produced nested <a> tags (invalid HTML, broken keyboard
+                // nav, React hydration warning).
+                <RunCard key={r.id} run={r} href={`/live/${r.id}`} />
               ))}
             </div>
           )}

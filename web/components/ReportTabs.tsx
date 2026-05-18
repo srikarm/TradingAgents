@@ -40,8 +40,11 @@ export default function ReportTabs({ sections }: { sections: ReportSections }) {
         {available.map((t) => (
           <button
             key={t.key}
+            id={`report-tab-${t.key}`}
             role="tab"
             aria-selected={active === t.key}
+            aria-controls={`report-tabpanel-${t.key}`}
+            tabIndex={active === t.key ? 0 : -1}
             onClick={() => setActive(t.key)}
             className={cn(
               "relative h-10 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
@@ -60,7 +63,12 @@ export default function ReportTabs({ sections }: { sections: ReportSections }) {
           </button>
         ))}
       </div>
-      <article className="prose-report">
+      <article
+        role="tabpanel"
+        id={`report-tabpanel-${active}`}
+        aria-labelledby={`report-tab-${active}`}
+        className="prose-report"
+      >
         <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>
           {sections[active] ?? ""}
         </ReactMarkdown>

@@ -14,10 +14,19 @@ function formatRelative(iso: string): string {
   return `${Math.round(sec / 86400)}d ago`;
 }
 
-export default function RunCard({ run }: { run: RunOut }) {
+export default function RunCard({
+  run,
+  href,
+}: {
+  run: RunOut;
+  /** Override the default `/history/{id}` target. Used by `/live/page.tsx`
+   * to send active-run cards to `/live/{id}` without wrapping the card in
+   * an outer Link (which would produce invalid nested-anchor HTML). */
+  href?: string;
+}) {
   return (
     <Link
-      href={`/history/${run.id}`}
+      href={href ?? `/history/${run.id}`}
       className="group relative flex items-center gap-4 overflow-hidden rounded-xl border border-border/60 bg-surface/40 px-5 py-4 backdrop-blur-sm transition-all duration-200 hover:border-border hover:bg-surface/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
     >
       {/* Hover wash — brand-tinted */}
