@@ -28,7 +28,7 @@ def _check_user_id(user_id: str) -> None:
         raise InvalidUserIdError(f"invalid user_id: {user_id!r}")
 
 
-def _check_segment(name: str, value: str, pattern: re.Pattern[str]) -> None:
+def check_segment(name: str, value: str, pattern: re.Pattern[str]) -> None:
     if not isinstance(value, str) or "\0" in value or not pattern.fullmatch(value):
         raise PathEscapeError(f"invalid {name}: {value!r}")
 
@@ -42,8 +42,8 @@ def user_results_dir(root: Path, user_id: str) -> Path:
 def user_run_dir(root: Path, user_id: str, ticker: str, trade_date: str) -> Path:
     """Return the directory holding a specific run's artifacts."""
     _check_user_id(user_id)
-    _check_segment("ticker", ticker, TICKER_RE)
-    _check_segment("trade_date", trade_date, DATE_RE)
+    check_segment("ticker", ticker, TICKER_RE)
+    check_segment("trade_date", trade_date, DATE_RE)
     return user_results_dir(root, user_id) / ticker / trade_date
 
 

@@ -21,7 +21,7 @@ from app.config import get_settings
 from app.services.user_root import (
     DATE_RE,
     TICKER_RE,
-    _check_segment,
+    check_segment,
     user_results_dir,
 )
 
@@ -83,9 +83,9 @@ async def fetch_prices(
     obviously invalid ticker/date inputs (defense-in-depth; route should
     already have validated).
     """
-    _check_segment("ticker", ticker, TICKER_RE)
-    _check_segment("start", start, DATE_RE)
-    _check_segment("end", end, DATE_RE)
+    check_segment("ticker", ticker, TICKER_RE)
+    check_segment("start", start, DATE_RE)
+    check_segment("end", end, DATE_RE)
 
     path = _cache_path(dashboard_dir, user_id, ticker, start, end)
     if path.is_file():
