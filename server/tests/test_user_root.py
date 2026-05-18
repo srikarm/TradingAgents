@@ -106,3 +106,19 @@ def test_user_report_file_inherits_user_id_validation(root: Path):
 def test_user_report_file_inherits_ticker_validation(root: Path):
     with pytest.raises(PathEscapeError):
         user_report_file(root, GOOD, "../bad", "2024-05-10", "market.md")
+
+
+def test_check_segment_is_public_api():
+    """v3+ followup #7: `check_segment` is part of user_root's public surface
+    because services outside this module (e.g., price_cache) need to validate
+    path segments before joining them into per-user paths. Importing it as
+    `_check_segment` would cross a private-name boundary and confuse readers
+    about whether the function is module-internal."""
+    from app.services.user_root import check_segment
+
+    assert callable(check_segment)
+
+    # And the validation behavior on a known-bad value matches the contract.
+    with pytest.raises(PathEscapeError):
+        from app.services.user_root import TICKER_RE
+        check_segment("ticker", "../etc/passwd", TICKER_RE)
