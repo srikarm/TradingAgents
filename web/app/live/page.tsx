@@ -1,43 +1,89 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Activity, PlayCircle } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import Nav from "@/components/Nav";
+import PageHeader from "@/components/PageHeader";
 import RunCard from "@/components/RunCard";
+import EmptyState from "@/components/EmptyState";
 
 export default async function LivePage() {
   const session = await auth();
   if (!session?.user) redirect("/api/auth/signin");
   const { items } = await api.listRuns();
   const active = items.filter((r) => r.status === "queued" || r.status === "running");
-  const recent = items.filter((r) => r.status === "succeeded" || r.status === "failed").slice(0, 10);
+  const recent = items
+    .filter((r) => r.status === "succeeded" || r.status === "failed")
+    .slice(0, 10);
 
   return (
     <>
       <Nav />
-      <main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-        <h1>Live runs</h1>
-        <section style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 18, color: "#374151" }}>Active</h2>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <PageHeader
+          eyebrow="Real-time"
+          title="Live runs"
+          description="Active analyses + the last 10 completions."
+          actions={
+            <Link
+              href="/launch"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-surface/60 px-3.5 text-[13px] font-medium text-fg backdrop-blur-sm transition-colors hover:border-border hover:bg-elevated"
+            >
+              <PlayCircle className="h-4 w-4 text-brand" aria-hidden />
+              New analysis
+            </Link>
+          }
+        />
+
+        <section className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">
+              <span className="inline-block h-2 w-2 animate-pulse-soft rounded-full bg-success" aria-hidden />
+              Active
+              <span className="rounded-full bg-elevated px-2 py-0.5 text-xs font-medium text-fg-muted normal-case tracking-normal">
+                {active.length}
+              </span>
+            </h2>
+          </div>
           {active.length === 0 ? (
-            <p style={{ color: "#6b7280" }}>
-              No active runs. <a href="/launch" style={{ color: "#2563eb" }}>Launch one →</a>
-            </p>
+            <EmptyState
+              icon={Activity}
+              title="Nothing running"
+              description="Launch an analysis to watch it stream here in real time."
+              action={
+                <Link
+                  href="/launch"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-brand-fg transition-colors hover:bg-brand/90"
+                >
+                  <PlayCircle className="h-4 w-4" aria-hidden />
+                  Launch analysis
+                </Link>
+              }
+            />
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div className="flex flex-col gap-2 animate-fade-in">
               {active.map((r) => (
-                <a key={r.id} href={`/live/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                <Link key={r.id} href={`/live/${r.id}`} className="block">
                   <RunCard run={r} />
-                </a>
+                </Link>
               ))}
             </div>
           )}
         </section>
-        <section>
-          <h2 style={{ fontSize: 18, color: "#374151" }}>Recent</h2>
-          <div style={{ display: "grid", gap: 12 }}>
-            {recent.map((r) => <RunCard key={r.id} run={r} />)}
-          </div>
-        </section>
+
+        {recent.length > 0 && (
+          <section>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-fg-muted">
+              Recent
+            </h2>
+            <div className="flex flex-col gap-2 animate-fade-in">
+              {recent.map((r) => (
+                <RunCard key={r.id} run={r} />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </>
   );
