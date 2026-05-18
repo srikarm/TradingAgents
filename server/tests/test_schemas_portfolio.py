@@ -111,3 +111,18 @@ def test_memory_entry_out_rejects_pending_with_raw_return():
             alpha_return=None,
             holding_days=None,
         )
+
+
+def test_decision_pin_rejects_pending_with_zero_raw_return():
+    """Pin the boundary case: raw_return=0.0 is `not None`, so the validator
+    rejects it even though 0.0 is a valid resolved return. Pending means
+    'no measurement yet' — 0.0 is a measurement of zero, not the absence
+    of one. Guards against a future refactor that loosens the check from
+    `is not None` to something like `> 0`."""
+    with pytest.raises(ValidationError):
+        DecisionPin(
+            trade_date="2024-05-10",
+            rating="Buy",
+            status="pending",
+            raw_return=0.0,
+        )
