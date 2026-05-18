@@ -3,6 +3,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ReportSections } from "@/lib/types";
+import { cn } from "@/lib/cn";
 
 const ORDER: { key: keyof ReportSections; label: string }[] = [
   { key: "market", label: "Market" },
@@ -14,32 +15,61 @@ const ORDER: { key: keyof ReportSections; label: string }[] = [
   { key: "final", label: "Final" },
 ];
 
+// remark-gfm is stateless; hoisting prevents a new array identity per render
+// (the original Wave 1 review caught this).
+const REMARK_PLUGINS = [remarkGfm];
+
 export default function ReportTabs({ sections }: { sections: ReportSections }) {
   const available = ORDER.filter((t) => sections[t.key]);
   const [active, setActive] = useState<keyof ReportSections | null>(
     available[0]?.key ?? null
   );
-  if (!active) return <p style={{ color: "#6b7280" }}>No reports on disk for this run.</p>;
+  if (!active) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-surface/40 px-6 py-12 text-center text-sm text-fg-muted">
+        No reports on disk for this run.
+      </div>
+    );
+  }
   return (
     <div>
-      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #e5e7eb",
-                    marginBottom: 16, flexWrap: "wrap" }}>
+      <div
+        role="tablist"
+        className="mb-6 flex flex-wrap gap-1 border-b border-border"
+      >
         {available.map((t) => (
           <button
             key={t.key}
+            id={`report-tab-${t.key}`}
+            role="tab"
+            aria-selected={active === t.key}
+            aria-controls={`report-tabpanel-${t.key}`}
+            tabIndex={active === t.key ? 0 : -1}
             onClick={() => setActive(t.key)}
-            style={{
-              padding: "8px 12px", border: "none", background: "transparent",
-              borderBottom: active === t.key ? "2px solid #2563eb" : "2px solid transparent",
-              cursor: "pointer", fontWeight: active === t.key ? 600 : 400,
-            }}
+            className={cn(
+              "relative h-10 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+              active === t.key
+                ? "text-fg"
+                : "text-fg-muted hover:text-fg"
+            )}
           >
             {t.label}
+            {active === t.key && (
+              <span
+                className="absolute inset-x-0 -bottom-px h-0.5 bg-brand"
+                aria-hidden
+              />
+            )}
           </button>
         ))}
       </div>
-      <article className="prose">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <article
+        role="tabpanel"
+        id={`report-tabpanel-${active}`}
+        aria-labelledby={`report-tab-${active}`}
+        className="prose-report"
+      >
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>
           {sections[active] ?? ""}
         </ReactMarkdown>
       </article>

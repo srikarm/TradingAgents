@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import Nav from "@/components/Nav";
+import PageHeader from "@/components/PageHeader";
 import PnLChart from "@/components/PnLChart";
 import PortfolioStats from "@/components/PortfolioStats";
 
@@ -15,17 +16,27 @@ export default async function PortfolioPage() {
   return (
     <>
       <Nav />
-      <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-        <h1>Portfolio</h1>
+      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <PageHeader
+          eyebrow="Performance"
+          title="Portfolio"
+          description="Per-decision P&L from every resolved analysis."
+        />
+
         <PortfolioStats summary={summary} />
-        <h2 style={{ fontSize: 16, color: "#374151", marginBottom: 8 }}>
-          Cumulative P&amp;L (per-decision)
-        </h2>
-        <PnLChart points={curve.points} />
-        <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 12 }}>
-          Note: P&amp;L is per-decision, not daily mark-to-market. Sharpe is
-          unannualized. See spec §5.3 caveats.
-        </p>
+
+        <section>
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-[10px] font-medium uppercase tracking-[0.18em] text-fg-subtle">
+              Cumulative P&amp;L
+            </h2>
+            <span className="text-xs text-fg-subtle">per-decision · not mark-to-market</span>
+          </div>
+          <PnLChart points={curve.points} />
+          <p className="mt-3 text-xs text-fg-subtle">
+            Note: P&amp;L is per-decision; Sharpe is unannualized. See spec §5.3 caveats.
+          </p>
+        </section>
       </main>
     </>
   );

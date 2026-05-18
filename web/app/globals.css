@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark-mode-only design tokens. Trading dashboards conventionally run dark —
+ * easier on the eyes during long sessions, and the color signals (green/red,
+ * BUY/SELL) pop more on a low-emission background. WCAG AA throughout.
+ *
+ * Single-source-of-truth: every color in the app reads from these vars via
+ * the Tailwind theme mapping in tailwind.config.ts. No raw hex in components.
+ */
+:root {
+  /* Axiara AI brand palette — see axiara-ai-brand-guidelines_Final.html.
+   * Pure-black base + brand red primary + brand blue secondary. Trading
+   * dashboards run dark; the brand identity reinforces that.
+   *
+   * RGB triplets so Tailwind's <alpha-value> token works in tailwind.config.ts.
+   */
+
+  /* Surface stack — true near-black, three layers for hierarchy */
+  --bg: 8 8 8;             /* #080808 — Axiara Background */
+  --surface: 22 22 22;     /* #161616 — Axiara Surface (cards, nav) */
+  --elevated: 31 31 31;    /* #1F1F1F — Axiara Border, doubles as elevated */
+  --border: 31 31 31;      /* #1F1F1F — Axiara Border (dividers, strokes) */
+  --muted: 22 22 22;       /* #161616 — disabled, code blocks */
+
+  /* Foreground stack — pure white with brand-muted gray midtone */
+  --fg: 255 255 255;       /* #FFFFFF — Axiara White (primary text) */
+  --fg-muted: 153 153 153; /* #999999 — between Axiara muted and muted-lt */
+  --fg-subtle: 107 107 107;/* #6B6B6B — Axiara Muted (tertiary, placeholder) */
+
+  /* Brand & accent — brand red is primary per the guideline */
+  --brand: 232 52 42;      /* #E8342A — Axiara Brand Red (CTAs, highlights) */
+  --brand-fg: 255 255 255; /* on brand */
+  --accent: 58 123 213;    /* #3A7BD5 — Axiara Brand Blue (links, secondary) */
+
+  /* Semantic status — brand red doubles as danger; brand blue as info.
+   * Green/amber kept for trading-convention BUY/HOLD signaling (not in
+   * brand palette, but required for financial UX — gains must be green). */
+  --success: 34 197 94;    /* green-500 — SUCCEEDED, BUY */
+  --warning: 234 179 8;    /* yellow-500 — RUNNING, HOLD */
+  --danger: 232 52 42;     /* #E8342A — FAILED, SELL (brand red doubles) */
+  --info: 58 123 213;      /* #3A7BD5 — QUEUED (brand blue doubles) */
+}
+
+html {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  color-scheme: dark;
+  font-feature-settings: "cv11", "ss01"; /* Inter stylistic refinements */
+}
+
+body {
+  @apply relative min-h-dvh font-sans antialiased;
+  text-rendering: optimizeLegibility;
+
+  /* Two-layer ambient gradient:
+   *  1. Radial brand-red glow from top-left, fading to nothing — gives the
+   *     page a subtle warmth and signals brand without flooding the surface.
+   *  2. Radial brand-blue glow from top-right, much softer — adds dimension.
+   * Both are positioned via background-attachment: fixed so they stay anchored
+   * to the viewport on scroll. Total visual cost: ~3% brand-color saturation,
+   * 97% black. The eye reads it as "premium dark" rather than "flat dark". */
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 15% -10%,
+      rgb(var(--brand) / 0.08),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 90% -10%,
+      rgb(var(--accent) / 0.06),
+      transparent 70%
+    );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Refined heading rhythm — Inter looks best with slight negative tracking */
+h1, h2, h3 {
+  letter-spacing: -0.011em;
+}
+
+/* Tabular figures for everything number-ish — prevents column jitter on
+ * portfolio P&L, prices, percentages. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbar so the log stream + history table don't look stock */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgb(var(--bg)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--border)); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--fg-subtle)); }
+
+/* Markdown body styles for the report tabs. Self-contained — we don't
+ * install @tailwindcss/typography just for this; the rules below cover the
+ * markdown shapes the analysts actually produce (headings, paragraphs,
+ * lists, tables, inline + block code, blockquotes, links). */
+.prose-report {
+  @apply max-w-none text-sm leading-7 text-fg;
+}
+.prose-report h1 { @apply mb-4 mt-6 text-2xl font-semibold tracking-tight text-fg; }
+.prose-report h2 { @apply mb-3 mt-6 border-b border-border pb-2 text-xl font-semibold text-fg; }
+.prose-report h3 { @apply mb-2 mt-5 text-lg font-semibold text-fg; }
+.prose-report h4 { @apply mb-2 mt-4 text-base font-semibold text-fg; }
+.prose-report p  { @apply my-3 text-fg-muted; }
+.prose-report a  { @apply text-brand underline-offset-2 hover:underline; }
+.prose-report strong { @apply font-semibold text-fg; }
+.prose-report ul { @apply my-3 list-disc space-y-1 pl-6 text-fg-muted; }
+.prose-report ol { @apply my-3 list-decimal space-y-1 pl-6 text-fg-muted; }
+.prose-report blockquote {
+  @apply my-4 border-l-2 border-brand/40 bg-surface/40 py-1 pl-4 italic text-fg-muted;
+}
+.prose-report code {
+  @apply rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-accent;
+}
+.prose-report pre {
+  @apply my-4 overflow-x-auto rounded-md border border-border bg-bg p-3 font-mono text-xs;
+}
+.prose-report pre code {
+  @apply bg-transparent p-0 text-fg;
+}
+.prose-report table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.prose-report th {
+  @apply border-b border-border bg-elevated px-3 py-2 text-left font-semibold text-fg;
+}
+.prose-report td {
+  @apply border-b border-border px-3 py-2 text-fg-muted;
+}
+.prose-report hr { @apply my-6 border-border; }
+
+/* Reduced motion: kill the framer-feel animations, keep state transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
