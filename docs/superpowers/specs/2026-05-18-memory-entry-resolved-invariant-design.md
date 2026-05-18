@@ -84,11 +84,13 @@ Standard SQL `CHECK` works in both Postgres and SQLite. No dialect-gating requir
 
 ### 4.3 Why `'RESOLVED'` (uppercase) in the SQL literal
 
-The `MemoryEntryStatus` enum's column is `Enum(MemoryEntryStatus, name="memory_entry_status")`. SQLAlchemy serializes enum members by their **name** (`'PENDING'`, `'RESOLVED'`) for Postgres, but by their **value** (`'pending'`, `'resolved'`) on SQLite when stored as text. This is a real cross-dialect trap.
+The `MemoryEntryStatus` enum's column is `Enum(MemoryEntryStatus, name="memory_entry_status")`. SQLAlchemy stores enum members by their **name** (`'PENDING'`, `'RESOLVED'`) on **both** Postgres and SQLite — the default `values_callable` is `lambda obj: [e.name for e in obj]`, applied uniformly across dialects. (An earlier draft of this section incorrectly claimed SQLite stores by `.value`; verification against the live engine confirmed that `column.type.enums` is `['PENDING', 'RESOLVED']` on both dialects.)
 
-Resolution: the existing migration `a1b2c3d4e5f6` declared the Postgres enum as `sa.Enum('PENDING', 'RESOLVED', name='memory_entry_status')` — uppercase names match the Python enum member names. SQLite stores the same values (member names). So `'RESOLVED'` in the CHECK SQL is correct on both.
+The lowercase `.value` (`'pending'`, `'resolved'`) only appears at the Pydantic boundary, via `r.status.value` in `routers/portfolio.py:80` when building API output. The DB-stored representation is uppercase regardless of dialect.
 
-The implementation plan verifies this with a Postgres-backed integration test and an existing SQLite test.
+So the CHECK SQL must use the DB-stored form: `'RESOLVED'` uppercase. Writing lowercase would silently always-allow on every dialect (the comparison `status != 'resolved'` is True for every stored value `'RESOLVED'`, so the constraint never rejects anything).
+
+The implementation plan verifies this with the `test_resolved_without_raw_return_rejected` test on SQLite and the migration smoke test, both of which would fail loudly if the casing mismatched.
 
 ---
 

@@ -147,3 +147,69 @@ async def test_sync_demotes_resolved_with_unparseable_raw(
         f"expected exactly one demote WARNING; got: "
         f"{[r.message for r in caplog.records]}"
     )
+
+
+@pytest.mark.asyncio
+async def test_sync_demotes_existing_resolved_row_on_update_path(
+    db_session, tmp_path, caplog,
+):
+    """Per spec §6 (UPDATE-path coverage): if a RESOLVED row already exists
+    in the DB and the next sync sees disk markdown that has been corrupted
+    (raw_return now unparseable), the existing row must be DEMOTED to
+    PENDING — not silently left at the stale RESOLVED state, and not
+    failing IntegrityError on the constraint.
+    """
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-update-demote"))
+    await db_session.flush()
+
+    # Pre-insert a valid RESOLVED row for (NVDA, 2024-05-12)
+    db_session.add(
+        MemoryEntry(
+            id=uuid.uuid4(),
+            user_id=uid,
+            ticker="NVDA",
+            trade_date="2024-05-12",
+            rating="Buy",
+            status=MemoryEntryStatus.RESOLVED,
+            raw_return=0.02,
+            alpha_return=0.01,
+            holding_days=5,
+        )
+    )
+    await db_session.commit()
+
+    # Now sync with the corrupted disk fixture (same NVDA/2024-05-12 entry
+    # but raw column is "n/a" — parses to None, triggering demote).
+    fixture = (
+        Path(__file__).parent / "fixtures"
+        / "trading_memory_resolved_unparseable.md"
+    )
+    mem_dir = tmp_path / "users" / str(uid) / "memory"
+    mem_dir.mkdir(parents=True)
+    (mem_dir / "trading_memory.md").write_text(fixture.read_text(encoding="utf-8"))
+
+    caplog.set_level(logging.WARNING, logger="app.services.memory_mirror")
+    count = await sync_user(db_session, dashboard_dir=tmp_path, user_id=uid)
+
+    assert count == 1
+    db_session.expire_all()
+    row = (
+        await db_session.execute(
+            select(MemoryEntry).where(MemoryEntry.user_id == uid)
+        )
+    ).scalar_one()
+    # UPDATE path was taken: same (user_id, ticker, trade_date), demoted
+    # from RESOLVED→PENDING, raw_return wiped to None.
+    assert row.status is MemoryEntryStatus.PENDING
+    assert row.raw_return is None
+    assert row.rating == "Buy"  # rating preserved on update
+
+    demote_warnings = [
+        r for r in caplog.records
+        if r.levelno == logging.WARNING and "demoting" in r.message
+        and "NVDA" in r.message
+    ]
+    assert len(demote_warnings) == 1, (
+        "demote WARNING must fire on UPDATE path too, not just INSERT"
+    )

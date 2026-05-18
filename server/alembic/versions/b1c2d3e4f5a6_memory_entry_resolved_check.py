@@ -27,10 +27,19 @@ def upgrade() -> None:
     # parse-failures that snuck through. Demote to PENDING so the constraint
     # can be applied. Re-sync from disk recovers proper RESOLVED status
     # once the disk markdown is corrected.
-    op.execute(
+    # Use op.get_bind().execute() instead of op.execute() so we can read
+    # rowcount and surface it in the alembic upgrade output — silent data
+    # mutations are hostile to operators investigating post-migration state.
+    bind = op.get_bind()
+    from sqlalchemy import text as _sqla_text
+    result = bind.execute(_sqla_text(
         "UPDATE memory_entries "
         "SET status = 'PENDING' "
         "WHERE status = 'RESOLVED' AND raw_return IS NULL"
+    ))
+    print(
+        f"[b1c2d3e4f5a6] backfill: demoted {result.rowcount} "
+        f"(status=RESOLVED, raw_return=NULL) rows to PENDING"
     )
     with op.batch_alter_table("memory_entries") as batch:
         batch.create_check_constraint(
@@ -45,6 +54,12 @@ def downgrade() -> None:
     No reverse backfill — once a row is demoted to PENDING in upgrade(),
     downgrade cannot infer the original raw_return value.
     """
+    print(
+        "[b1c2d3e4f5a6] WARNING: dropping "
+        "ck_memory_entry_resolved_has_raw_return. Rows demoted to PENDING "
+        "by upgrade() are NOT restored — run memory_mirror.sync_user "
+        "after correcting the disk markdown to recover RESOLVED status."
+    )
     with op.batch_alter_table("memory_entries") as batch:
         batch.drop_constraint(
             "ck_memory_entry_resolved_has_raw_return", type_="check"
