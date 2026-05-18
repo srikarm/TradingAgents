@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
-
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.portfolio import (
     DecisionPin,
@@ -33,6 +32,7 @@ def test_memory_entry_out_accepts_pending_with_nulls():
         raw_return=None, alpha_return=None, holding_days=None,
     )
     assert e.status == "pending"
+    assert e.raw_return is None  # invariant: pending ⟹ raw_return is None
 
 
 def test_portfolio_summary_shape():
@@ -74,3 +74,55 @@ def test_ticker_detail_shape():
     assert d.ticker == "NVDA"
     assert d.prices[0].close == pytest.approx(950.12)
     assert d.decisions[0].rating == "Buy"
+
+
+def test_decision_pin_rejects_pending_with_raw_return():
+    """Spec §3: status='pending' requires raw_return=None."""
+    with pytest.raises(ValidationError):
+        DecisionPin(
+            trade_date="2024-05-10",
+            rating="Buy",
+            status="pending",
+            raw_return=0.5,
+        )
+
+
+def test_decision_pin_accepts_pending_with_null_raw():
+    """The valid pending case (status='pending', raw_return=None) must pass."""
+    pin = DecisionPin(
+        trade_date="2024-05-10",
+        rating="Buy",
+        status="pending",
+        raw_return=None,
+    )
+    assert pin.status == "pending"
+    assert pin.raw_return is None
+
+
+def test_memory_entry_out_rejects_pending_with_raw_return():
+    """Spec §3 mirrored on MemoryEntryOut."""
+    with pytest.raises(ValidationError):
+        MemoryEntryOut(
+            ticker="NVDA",
+            trade_date="2024-05-10",
+            rating="Buy",
+            status="pending",
+            raw_return=0.5,
+            alpha_return=None,
+            holding_days=None,
+        )
+
+
+def test_decision_pin_rejects_pending_with_zero_raw_return():
+    """Pin the boundary case: raw_return=0.0 is `not None`, so the validator
+    rejects it even though 0.0 is a valid resolved return. Pending means
+    'no measurement yet' — 0.0 is a measurement of zero, not the absence
+    of one. Guards against a future refactor that loosens the check from
+    `is not None` to something like `> 0`."""
+    with pytest.raises(ValidationError):
+        DecisionPin(
+            trade_date="2024-05-10",
+            rating="Buy",
+            status="pending",
+            raw_return=0.0,
+        )

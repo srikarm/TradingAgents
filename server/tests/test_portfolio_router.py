@@ -297,3 +297,35 @@ async def test_summary_returns_existing_data_when_sync_raises(
     body = r.json()
     assert body["trade_count"] == 1
     assert body["cumulative_pnl"] == pytest.approx(0.03)
+
+
+@pytest.mark.asyncio
+async def test_ticker_detail_renders_pending_entry(
+    client, db_session, monkeypatch,
+):
+    """A PENDING entry (raw_return=None) must round-trip through
+    /portfolio/ticker/{ticker} without tripping the DecisionPin
+    pending-implies-null-raw validator (spec §5.2 — the validator
+    must not 500 on legitimate pending data)."""
+    uid = uuid.uuid4()
+    db_session.add(User(id=uid, github_id="gh-tpend"))
+    _add_entry(
+        db_session, user_id=uid, ticker="NVDA", trade_date="2024-05-10",
+        rating="Buy", raw=None, status=MemoryEntryStatus.PENDING,
+    )
+    await db_session.flush()
+
+    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end):
+        return [{"trade_date": "2024-05-10", "close": 100.0}]
+    monkeypatch.setattr(portfolio_router, "_fetch_prices", fake_fetch)
+
+    async with client as c:
+        r = await c.get(
+            "/portfolio/ticker/NVDA",
+            headers={"Authorization": f"Bearer {make_jwt('gh-tpend')}"},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["decisions"]) == 1
+    assert body["decisions"][0]["status"] == "pending"
+    assert body["decisions"][0]["raw_return"] is None

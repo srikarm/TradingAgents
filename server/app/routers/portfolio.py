@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import Path as PathParam
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -134,15 +136,35 @@ async def get_ticker_detail(
     start = (datetime.strptime(dates[0], "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
     end = (datetime.strptime(dates[-1], "%Y-%m-%d") + timedelta(days=30)).strftime("%Y-%m-%d")
 
-    decisions = [
-        DecisionPin(
-            trade_date=r.trade_date,
-            rating=r.rating,
-            status=r.status.value,
-            raw_return=r.raw_return,
+    # DecisionPin enforces the (status='pending' ⟹ raw_return IS NULL)
+    # invariant via @model_validator. If any DB row violates it (e.g.,
+    # direct SQL INSERT, future endpoint bypassing the parser), the
+    # construction raises ValidationError — without the explicit catch
+    # below, a single corrupt row would 500 the entire endpoint and
+    # produce no log context about which row caused it. Logging the
+    # offending trade_dates + user lets operators locate the row quickly.
+    try:
+        decisions = [
+            DecisionPin(
+                trade_date=r.trade_date,
+                rating=r.rating,
+                status=r.status.value,
+                raw_return=r.raw_return,
+            )
+            for r in rows
+        ]
+    except ValidationError:
+        logger.error(
+            "DecisionPin invariant violated for user_id=%s ticker=%s — "
+            "DB row(s) have status='pending' with raw_return IS NOT NULL "
+            "(or other schema violation); inspect trade_dates: %s",
+            user.id, ticker, [r.trade_date for r in rows],
+            exc_info=True,
         )
-        for r in rows
-    ]
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal data integrity error.",
+        ) from None
 
     try:
         price_points = await _fetch_prices(
