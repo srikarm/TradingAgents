@@ -13,6 +13,7 @@ services:
     image: ghcr.io/erikgunawans/tradingagents-api:${IMAGE_TAG:-latest}
     pull_policy: always
     build: !reset null
+    restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
     env_file: /etc/tradingagents/env
@@ -22,6 +23,7 @@ services:
     image: ghcr.io/erikgunawans/tradingagents-api:${IMAGE_TAG:-latest}
     pull_policy: always
     build: !reset null
+    restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL}
     env_file: /etc/tradingagents/env
@@ -30,10 +32,12 @@ services:
     image: ghcr.io/erikgunawans/tradingagents-web:${IMAGE_TAG:-latest}
     pull_policy: always
     build: !reset null
+    restart: unless-stopped
     env_file: /etc/tradingagents/env
     ports: !override []
 
   db:
+    restart: unless-stopped
     ports: !override []
     environment:
       POSTGRES_USER: trading
@@ -41,6 +45,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
   redis:
+    restart: unless-stopped
     ports: !override []
 
   caddy:
