@@ -22,7 +22,7 @@ import logging
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
 logger = logging.getLogger(__name__)
@@ -169,7 +169,11 @@ def get_news_indonesia(
     """
     try:
         start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        # End-date inclusive through 23:59:59 of that day — RSS pub dates are
+        # local-time wall-clock (after tzinfo strip), so an item published at
+        # 08:00 on the end_date would otherwise fall outside [00:00, 00:00].
+        # Mirrors get_news_yfinance's `end_dt + relativedelta(days=1)`.
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
     except ValueError:
         return f"Error: invalid date range {start_date} → {end_date}"
 
