@@ -2,6 +2,13 @@ from langchain_core.tools import tool
 from typing import Annotated, Optional
 from tradingagents.dataflows.interface import route_to_vendor
 
+# Suffixes that should bypass the global vendor chain and use a region-
+# specific news source instead. Today only Indonesia is wired; if more
+# regional sources land (e.g. .KS for Korea, .SS for Shanghai), add them
+# here and route in get_news below.
+_REGIONAL_NEWS_SUFFIXES = (".JK",)
+
+
 @tool
 def get_news(
     ticker: Annotated[str, "Ticker symbol"],
@@ -10,14 +17,30 @@ def get_news(
 ) -> str:
     """
     Retrieve news data for a given ticker symbol.
-    Uses the configured news_data vendor.
+    Uses the configured news_data vendor for global tickers; .JK
+    (Indonesia / IDX) tickers route to the Indonesian RSS aggregator
+    (Detik Finance + Bisnis Indonesia) for better local coverage.
+
     Args:
-        ticker (str): Ticker symbol
+        ticker (str): Ticker symbol (e.g. NVDA, BBCA.JK)
         start_date (str): Start date in yyyy-mm-dd format
         end_date (str): End date in yyyy-mm-dd format
     Returns:
         str: A formatted string containing news data
     """
+    if ticker.upper().endswith(_REGIONAL_NEWS_SUFFIXES):
+        # Lazy import: indonesia_news pulls in urllib + xml.etree at module
+        # load — cheap, but worth keeping out of the import graph for
+        # callers (e.g. test collection) that never touch .JK tickers.
+        from tradingagents.dataflows.config import get_config
+        from tradingagents.dataflows.indonesia_news import get_news_indonesia
+        # Honor the user's news_article_limit knob — get_news_yfinance reads
+        # the same key. Without this, .JK tickers always get 20 articles
+        # regardless of config, which silently surprised the PR #17 reviewer.
+        return get_news_indonesia(
+            ticker, start_date, end_date,
+            max_articles=get_config()["news_article_limit"],
+        )
     return route_to_vendor("get_news", ticker, start_date, end_date)
 
 @tool
