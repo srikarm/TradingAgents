@@ -36,8 +36,8 @@ This is what to do **once** when bringing up `tradix.axiara.ai` for the very fir
    gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- bash -lc '
      cd /srv/tradingagents
      export IMAGE_TAG=latest
-     docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+     docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml pull
+     docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml up -d
    '
    ```
 

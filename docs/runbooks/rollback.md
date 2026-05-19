@@ -19,8 +19,8 @@ To roll back, point the prod compose at a prior SHA.
      PREV_SHA=<paste-prior-sha-here>
      cd /srv/tradingagents
      export IMAGE_TAG=$PREV_SHA
-     docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+     docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml pull
+     docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml up -d
      echo $PREV_SHA > .current_image_tag
    '
    ```

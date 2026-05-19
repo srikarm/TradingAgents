@@ -91,8 +91,8 @@ jobs:
             git reset --hard origin/main
             export IMAGE_TAG=$IMAGE_TAG
             echo \"\$IMAGE_TAG\" > .current_image_tag
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
           "
 
