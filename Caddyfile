@@ -1,0 +1,10 @@
+# Production reverse proxy for tradix.axiara.ai.
+# Caddy auto-fetches + auto-renews a Let's Encrypt cert on first start.
+
+tradix.axiara.ai {
+    encode gzip zstd
+    reverse_proxy web:3000
+
+    # Forward client IP to upstream — Next.js + FastAPI both honor X-Forwarded-For
+    # via the standard headers Caddy sets by default.
+}

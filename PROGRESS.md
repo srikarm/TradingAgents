@@ -2,35 +2,37 @@
 
 ## Current State
 
-- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `6216d8f`)
-- **Tests:** 159 server tests passing + 3 library tests for save_report_to_disk + 2 library tests for run_graph stream kwargs
-- **PRs merged:** 16 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 hotfix (PR #15) + 1 UI modernization (PR #16)
+- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `23e3c12`)
+- **Tests:** 159 server tests passing + 21 library tests (5 prior + 16 Indonesia news tests from PR #17)
+- **PRs merged:** 18 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (PR #15) + 1 UI modernization (PR #16) + 1 Indonesia stock support (PR #17) + 1 RSS hotfix (PR #18)
 - **v3+ followups remaining:** 0 of 12 — entire dashboard-wave-3 deferred list closed 🎉
+- **Indonesia (IDX) support (PRs #17 + #18):** `.JK` ticker routing → Indonesian RSS news source (Detik, Kompas, Bisnis, Investasi) + `^JKSE` benchmark mapping + Launch-form IDX hint. Hotfix #18 swapped four dead RSS URLs for live ones.
 - **Production worker bugs from PR #15 hotfix:** worker model imports + stream_mode duplicate kwarg — both fixed with regression tests, end-to-end verified.
 - **Dashboard UI modernization (PR #16):** Tailwind + Axiara AI brand palette + glass design system applied across every page. Inter + JetBrains Mono fonts, Lucide icons, dark-only OLED palette.
 
 | Metric | Value |
 |---|---|
-| Local main HEAD | `6216d8f` (Merge PR #16) |
-| Most recent PR | #16 — dashboard UI modernization (Tailwind + Axiara brand + glass), merged 2026-05-18 |
+| Local main HEAD | `23e3c12` (Merge PR #18) |
+| Most recent PR | #18 — `hotfix(dataflows): swap dead Indonesia RSS URLs for live ones`, merged 2026-05-19 10:33 UTC |
 | Server test suite | 159 pass / 1 deselected |
-| Library test suite | 3 + 2 new tests (save_report_to_disk, run_graph stream kwargs); pre-existing root collection errors unrelated |
-| Working tree | clean (only `uv.lock` drift + `.DS_Store`/build artifacts untracked) |
+| Library test suite | 21 pass in scoped runs (5 prior + 16 new Indonesia tests); pre-existing root collection errors unrelated |
+| Working tree | only `docker-compose.yml` + `uv.lock` drift + `.DS_Store`/build artifacts untracked |
 | Active branches ahead of main | none |
 
 ## What To Do Next
 
-**Dashboard fully shipped + modernized.** All 16 PRs merged. Next direction is open — pick a new feature, refactor, or area of work.
+**Dashboard fully shipped + modernized + Indonesia market support added.** All 18 PRs merged. Active focus: **make the system deployable to Google Cloud and/or a VPS** so the dashboard is reachable beyond a local dev laptop.
 
 External / account-level blocker (not a code issue):
 - **OpenAI quota** — every demo run hits HTTP 429 `insufficient_quota`. To exercise a SUCCEEDED run end-to-end, either top up the OpenAI account (`sk-proj-…` key in `.env`) or swap to Anthropic / Google by adding the matching `*_API_KEY` to `.env` and setting `default_llm_provider` accordingly.
 
 Possible next directions (none gated; just suggestions):
+- **🚀 Cloud + VPS deployment (active)** — currently the only way to run the system is `docker compose up` locally. Goal: package the existing `docker-compose.yml` stack (api / db / redis / web / worker) so it runs on Google Cloud and/or a VPS, with managed secrets for LLM API keys, persistent storage for the reports volume + Postgres, HTTPS + a domain, and a repeatable deploy from `main`. Architecture decision pending: managed services (Cloud Run + Cloud SQL + Memorystore) vs single VM (Compute Engine / Hetzner running docker-compose). See the deployment plan doc in `docs/superpowers/plans/` once brainstorming completes.
+- **More international markets** — momentum from PR #17 suggests extending the same pattern to other non-US exchanges (LSE `.L`, TSE `.T`, BVMF `.SA`, etc.). Each = benchmark mapping + region-appropriate news source + Launch-form hint update.
 - **CLI / worker `_persist_reports` unification** — out-of-scope from PR #14: switch `server/app/workers/tasks.py:_persist_reports` to call the canonical `tradingagents.reports.save_report_to_disk` instead of maintaining its subset. Behavior change (worker would start writing the full 5-tier layout including risk + portfolio + consolidated report); needs a design decision.
 - **Light-mode variant** — currently dark-only per the Axiara brand guidelines. Adding light mode = define `:root[data-theme="light"]` with inverted tokens + a theme toggle.
 - **Polish `TickerPriceChart` + `DecisionTimeline`** — legacy inline styles still on the `/portfolio/[ticker]` route per PR #16 scope note.
 - **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.) — orthogonal to all current work; fixing them unblocks end-to-end library testing.
-- **A new feature direction** — agent additions, new data sources, multi-tenant features, etc.
 
 ---
 
@@ -46,6 +48,25 @@ Possible next directions (none gated; just suggestions):
 - **Files changed (this turn):** 3 — `PROGRESS.md`, `MEMORY.md`, `project_dashboard_wave_status.md`.
 - **Tests:** Server suite 159/1 (unchanged; nothing in this turn touches server code).
 - **Next:** Pick from the "What To Do Next" list above. OpenAI quota is the only thing standing between you and a SUCCEEDED demo run — every other surface works.
+
+---
+
+## Checkpoint 2026-05-19 (PR #17 + #18 merged — Indonesia stock market support)
+
+- **Session pattern:** Feature PR → review followup → merge → demo via Playwright → dead-RSS surfaced live → hotfix PR → merge. All in one sitting.
+- **PR #17 (`feature/indonesia-stock-support`):** First non-US exchange support. 511+/4-, 6 commits, merged 2026-05-19 09:59 UTC at `b053117`.
+  - `accd5ea` chore: add `.JK` benchmark mapping (`^JKSE`) for Indonesia stocks
+  - `0eb668f` feat(dataflows): RSS-based Indonesian news source for IDX tickers (Detik Finance, Kompas Money, Bisnis.com Market, Investasi.kontan.co.id)
+  - `2f058d8` feat(news): route `.JK` tickers in `get_news_for_ticker` to the new Indonesian source
+  - `92f0cf1` feat(web): Launch form hints "IDX example (e.g. BBCA.JK)" in the ticker field
+  - `5d83dc6` test: 14 new tests in `tests/test_indonesia_news.py` covering RSS parsing, relevance matching, integration formatting, dedup, empty-result handling, malformed-XML survival
+  - `83fdac1` fix: code-review followup — honor `news_article_limit` from config + use word-boundary regex match instead of substring (prevents "BCA" matching "BCAA"), +2 tests → 16 total
+- **PR #18 (`feature/indonesia-rss-urls-hotfix`):** Surfaced during Playwright demo on BBCA.JK — three of four Indonesian RSS feeds were dead URLs. Replaced with verified-live endpoints. 12+/5-, merged 2026-05-19 10:33 UTC at `23e3c12`.
+  - `90f2957` hotfix(dataflows): swap dead Indonesia RSS URLs for live ones
+- **Demo verified:** BBCA.JK and BMRI.JK runs both reach `[market_analyst] starting` in the worker log stream and now actually pull Indonesian news instead of returning empty (`bbca-jk-final.png`, `bmri-jk-stream.png` in repo root). OpenAI quota 429 still the only end-stage blocker.
+- **Why this matters as a pattern:** The whole "support exchange X" recipe is now well-defined: (1) add benchmark mapping in `tradingagents/default_config.py`, (2) write a region-specific news source under `tradingagents/dataflows/`, (3) add a ticker-suffix route in `get_news_for_ticker`, (4) update the Launch form hint, (5) pin every piece with tests. Same recipe will scale to LSE / TSE / BVMF.
+- **Process note:** The code-review followup (`83fdac1`) caught a real semantic bug — substring match on `"BCA"` would incorrectly match `"BCAA"`. Word-boundary regex is the safer default for ticker→news relevance and worth applying retroactively if the US source ever shows the same false-positive pattern.
+- **Post-merge state:** local main fast-forwarded to `23e3c12`; server suite still 159/1 (no server code touched); library suite for new module: 16 pass scoped run.
 
 ---
 

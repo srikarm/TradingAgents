@@ -1,0 +1,66 @@
+# Production overlay. Used with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Overrides the dev compose to:
+#   - replace `build:` with pre-built ghcr.io images (built by CI)
+#   - hide internal services from the host (no public ports for db/redis/api/web)
+#   - load secrets from /etc/tradingagents/env (NOT in git)
+#   - add Caddy reverse proxy as the only public-facing service
+#   - use a generated POSTGRES_PASSWORD instead of the dev literal "trading"
+
+services:
+  api:
+    image: ghcr.io/erikgunawans/tradingagents-api:${IMAGE_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    env_file: /etc/tradingagents/env
+    ports: !override []
+
+  worker:
+    image: ghcr.io/erikgunawans/tradingagents-api:${IMAGE_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    env_file: /etc/tradingagents/env
+
+  web:
+    image: ghcr.io/erikgunawans/tradingagents-web:${IMAGE_TAG:-latest}
+    pull_policy: always
+    build: !reset null
+    restart: unless-stopped
+    env_file: /etc/tradingagents/env
+    ports: !override []
+
+  db:
+    restart: unless-stopped
+    ports: !override []
+    environment:
+      POSTGRES_USER: trading
+      POSTGRES_DB: trading_dashboard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  redis:
+    restart: unless-stopped
+    ports: !override []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
