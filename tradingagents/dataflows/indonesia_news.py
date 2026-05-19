@@ -19,6 +19,7 @@ falls short, the next step would be a translation pass before the LLM hop.
 from __future__ import annotations
 
 import logging
+import re
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -145,9 +146,19 @@ def _parse_rss(body: bytes) -> list[dict]:
 
 
 def _matches(item: dict, aliases: list[str]) -> bool:
-    """Case-insensitive substring match of any alias against title+description."""
-    hay = f"{item['title']} {item['description']}".lower()
-    return any(alias.lower() in hay for alias in aliases)
+    """Case-insensitive word-boundary match of any alias against title+description.
+
+    Word-boundary (``\\b``) is required because three-letter aliases like
+    "BCA", "BRI", "BNI", "PGN" would substring-match unrelated text otherwise
+    — e.g. "ABCA Mining" would falsely match BBCA, "REBNI" would falsely
+    match BBNI. Caught by the PR #17 reviewer; regression test in
+    tests/test_indonesia_news.py pins the boundary behavior.
+    """
+    hay = f"{item['title']} {item['description']}"
+    return any(
+        re.search(r"\b" + re.escape(alias) + r"\b", hay, re.IGNORECASE)
+        for alias in aliases
+    )
 
 
 def get_news_indonesia(

@@ -162,11 +162,74 @@ def test_news_data_tools_get_news_routes_jk_to_indonesia():
     assert "endswith(_REGIONAL_NEWS_SUFFIXES)" in src
 
     # And it must import + call get_news_indonesia in the .JK branch.
+    # Whitespace-tolerant: the call may be single-line or split across
+    # multiple lines once max_articles=... is added (see config-honor
+    # commit). We just check that the function is invoked at all.
     assert "from tradingagents.dataflows.indonesia_news import get_news_indonesia" in src
-    assert "get_news_indonesia(ticker, start_date, end_date)" in src
+    assert "get_news_indonesia(" in src
+    assert "ticker, start_date, end_date" in src
 
     # And the non-regional branch must still go through route_to_vendor.
     assert 'route_to_vendor("get_news", ticker, start_date, end_date)' in src
+
+
+def test_matches_word_boundary_excludes_substring_false_positives():
+    """PR #17 reviewer flagged that 3-char aliases (BCA, BRI, BNI, PGN)
+    would substring-match unrelated text. Word-boundary regex match fixes
+    this — e.g. 'ABCA Mining' must NOT pull into BBCA results."""
+    # Clear positive: BCA as a standalone word
+    assert indonesia_news._matches(
+        {"title": "BCA mengumumkan laba", "description": ""},
+        ["BBCA", "BCA"],
+    )
+    # Clear positive: surrounded by punctuation (\b still fires)
+    assert indonesia_news._matches(
+        {"title": "(BCA) catat rekor", "description": ""},
+        ["BBCA", "BCA"],
+    )
+    # Negative: BCA embedded in a longer word — false positive before
+    # the boundary fix, correctly excluded now.
+    assert not indonesia_news._matches(
+        {"title": "ABCA Mining Group", "description": ""},
+        ["BBCA", "BCA"],
+    )
+    # Negative: BNI inside another word
+    assert not indonesia_news._matches(
+        {"title": "REBNIumumkan", "description": ""},
+        ["BBNI", "BNI"],
+    )
+
+
+def test_news_data_tools_honors_news_article_limit_config():
+    """PR #17 reviewer flagged that get_news_indonesia was hard-coded to
+    max_articles=20 instead of reading news_article_limit from config the
+    way get_news_yfinance does. This source-string test pins the wiring
+    so a future refactor that drops the config read fails loudly.
+
+    Behavioral test (importing news_data_tools) is blocked by the same
+    langchain_core gap as the routing test above — see PR #15 precedent.
+    """
+    from pathlib import Path
+
+    src_path = (
+        Path(__file__).resolve().parent.parent
+        / "tradingagents"
+        / "agents"
+        / "utils"
+        / "news_data_tools.py"
+    )
+    src = src_path.read_text(encoding="utf-8")
+
+    assert "from tradingagents.dataflows.config import get_config" in src, (
+        "news_data_tools.get_news must import get_config in the .JK branch"
+    )
+    assert 'get_config()["news_article_limit"]' in src, (
+        "news_data_tools.get_news must read news_article_limit from config"
+    )
+    assert "max_articles=" in src, (
+        "news_data_tools.get_news must pass max_articles= so the config "
+        "value reaches get_news_indonesia"
+    )
 
 
 def test_jk_benchmark_resolves_to_jkse():

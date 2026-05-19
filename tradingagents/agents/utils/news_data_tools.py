@@ -32,8 +32,15 @@ def get_news(
         # Lazy import: indonesia_news pulls in urllib + xml.etree at module
         # load — cheap, but worth keeping out of the import graph for
         # callers (e.g. test collection) that never touch .JK tickers.
+        from tradingagents.dataflows.config import get_config
         from tradingagents.dataflows.indonesia_news import get_news_indonesia
-        return get_news_indonesia(ticker, start_date, end_date)
+        # Honor the user's news_article_limit knob — get_news_yfinance reads
+        # the same key. Without this, .JK tickers always get 20 articles
+        # regardless of config, which silently surprised the PR #17 reviewer.
+        return get_news_indonesia(
+            ticker, start_date, end_date,
+            max_articles=get_config()["news_article_limit"],
+        )
     return route_to_vendor("get_news", ticker, start_date, end_date)
 
 @tool
