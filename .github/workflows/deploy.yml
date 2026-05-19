@@ -1,0 +1,111 @@
+# Build + push api and web images to ghcr.io, then SSH to the prod VM and
+# bounce the stack against the new images. Triggered on pushes to main.
+#
+# Required GitHub Secrets:
+#   DEPLOY_HOST       — public hostname of the VM (tradix.axiara.ai)
+#   DEPLOY_USER       — Linux user on the VM (typically erikgunawans or root)
+#   DEPLOY_SSH_KEY    — private half of an ed25519 deploy key; public half is
+#                       in ~DEPLOY_USER/.ssh/authorized_keys on the VM.
+
+name: Deploy to tradix.axiara.ai
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/tradingagents
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            context: .
+            dockerfile: server/Dockerfile
+          - service: web
+            context: ./web
+            dockerfile: ./web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VM
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Pull + restart on VM
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -lc "
+            set -euo pipefail
+            cd /srv/tradingagents
+            git fetch --all
+            git reset --hard origin/main
+            export IMAGE_TAG=$IMAGE_TAG
+            echo \"\$IMAGE_TAG\" > .current_image_tag
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
+          "
+
+      - name: Smoke test
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          for _attempt in {1..10}; do
+            if curl -fsS "https://$DEPLOY_HOST/api/auth/providers" >/dev/null; then
+              echo "Smoke test passed"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Smoke test FAILED after 50s" >&2
+          exit 1
