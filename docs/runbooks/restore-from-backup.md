@@ -15,12 +15,21 @@ gcloud storage ls gs://tradix-backups/reports/ | sort -r | head -14
 ```bash
 DUMP=db-YYYYMMDD-HHMMSS.sql.gz   # pick from the list above
 
+# Stop api + worker first — Postgres rejects DROP DATABASE while any client
+# holds an open connection (api/worker connection pools will do so).
+gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- \
+  docker compose -f /srv/tradingagents/docker-compose.yml -f /srv/tradingagents/docker-compose.prod.yml stop api worker
+
 gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- bash -lc "
   cd /tmp && gcloud storage cp gs://tradix-backups/db/${DUMP} .
   docker exec -t \$(docker ps -qf name=db) psql -U trading -d postgres -c 'DROP DATABASE IF EXISTS trading_dashboard;'
   docker exec -t \$(docker ps -qf name=db) psql -U trading -d postgres -c 'CREATE DATABASE trading_dashboard;'
   gunzip -c ${DUMP} | docker exec -i \$(docker ps -qf name=db) psql -U trading trading_dashboard
 "
+
+# Restart api + worker after restore completes.
+gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- \
+  docker compose -f /srv/tradingagents/docker-compose.yml -f /srv/tradingagents/docker-compose.prod.yml up -d api worker
 ```
 
 ## Restore reports volume (destructive — overwrites all reports)
