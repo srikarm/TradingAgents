@@ -10,8 +10,8 @@ set -euo pipefail
 
 BUCKET="${BUCKET:-tradix-backups}"
 TS="$(date +%Y%m%d-%H%M%S)"
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 DB_CONTAINER="$(docker ps -qf name=db | head -n1)"
 if [[ -z "$DB_CONTAINER" ]]; then
@@ -23,16 +23,16 @@ echo "[$(date -Is)] backup start (ts=$TS)"
 
 echo "[$(date -Is)] dumping Postgres"
 docker exec -t "$DB_CONTAINER" \
-  pg_dump -U trading trading_dashboard | gzip > "$TMPDIR/db-${TS}.sql.gz"
+  pg_dump -U trading trading_dashboard | gzip > "$WORK_DIR/db-${TS}.sql.gz"
 
 echo "[$(date -Is)] tarring dashdata volume"
 docker run --rm \
   -v tradingagents_dashdata:/data:ro \
-  -v "$TMPDIR":/backup \
+  -v "$WORK_DIR":/backup \
   alpine tar -czf "/backup/reports-${TS}.tgz" -C /data .
 
 echo "[$(date -Is)] uploading to gs://${BUCKET}/"
-gcloud storage cp "$TMPDIR/db-${TS}.sql.gz"   "gs://${BUCKET}/db/"
-gcloud storage cp "$TMPDIR/reports-${TS}.tgz" "gs://${BUCKET}/reports/"
+gcloud storage cp "$WORK_DIR/db-${TS}.sql.gz"   "gs://${BUCKET}/db/"
+gcloud storage cp "$WORK_DIR/reports-${TS}.tgz" "gs://${BUCKET}/reports/"
 
 echo "[$(date -Is)] backup done"

@@ -7,6 +7,7 @@ This is what to do **once** when bringing up `tradix.axiara.ai` for the very fir
 - `infra/provision.sh` has been run and printed a static IP.
 - Hostinger DNS A record for `tradix.axiara.ai` points at that IP.
 - The GitHub OAuth app has `https://tradix.axiara.ai/api/auth/callback/github` in its callback whitelist.
+- If `DEPLOY_USER` (the user the GitHub Actions deploy job SSHes in as) is non-root, that user must be in the `docker` group on the VM. After `bootstrap.sh` runs: `sudo usermod -aG docker <DEPLOY_USER>` then have that user log out and back in. The default `gcloud compute ssh` user already has docker access via GCE's default config, so this only matters if you set `DEPLOY_USER` to something other than the gcloud-default identity.
 
 ## Steps
 

@@ -88,6 +88,8 @@ jobs:
             set -euo pipefail
             cd /srv/tradingagents
             git fetch --all
+            # VM repo is a read-only mirror of main; reset --hard is safer
+            # than --ff-only on CI-managed state.
             git reset --hard origin/main
             export IMAGE_TAG=$IMAGE_TAG
             echo \"\$IMAGE_TAG\" > .current_image_tag

@@ -13,6 +13,9 @@ set -euo pipefail
 : "${BUCKET_NAME:?Set BUCKET_NAME}"
 : "${SA_NAME:?Set SA_NAME}"
 
+LIFECYCLE_FILE="$(mktemp)"
+trap 'rm -f "$LIFECYCLE_FILE"' EXIT
+
 gcloud config set project "$GCP_PROJECT_ID"
 
 echo "==> Enabling required APIs (idempotent)"
@@ -37,15 +40,14 @@ if ! gcloud storage buckets describe "gs://$BUCKET_NAME" >/dev/null 2>&1; then
 fi
 
 echo "==> Applying 14-day lifecycle rule to gs://$BUCKET_NAME"
-cat >/tmp/lifecycle.json <<'JSON'
+cat >"$LIFECYCLE_FILE" <<'JSON'
 {
   "rule": [
     { "action": {"type": "Delete"}, "condition": {"age": 14} }
   ]
 }
 JSON
-gcloud storage buckets update "gs://$BUCKET_NAME" --lifecycle-file=/tmp/lifecycle.json
-rm /tmp/lifecycle.json
+gcloud storage buckets update "gs://$BUCKET_NAME" --lifecycle-file="$LIFECYCLE_FILE"
 
 echo "==> Granting service account objectAdmin on the backup bucket only"
 gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_NAME" \
