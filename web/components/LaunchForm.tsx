@@ -83,9 +83,10 @@ export default function LaunchForm() {
               className="h-11 w-full rounded-lg border border-border/60 bg-bg/40 px-3.5 font-mono text-[15px] text-fg placeholder:text-fg-subtle/60 transition-colors focus:border-brand/60 focus:bg-bg/70 focus:outline-none focus:ring-1 focus:ring-brand/40"
             />
             <p className="mt-2 text-xs text-fg-subtle">
-              US listing or supported foreign suffix (e.g.{" "}
+              US listing or supported foreign suffix — e.g.{" "}
               <span className="font-mono text-fg-muted">NVDA</span>,{" "}
-              <span className="font-mono text-fg-muted">7203.T</span>).
+              <span className="font-mono text-fg-muted">7203.T</span> (Tokyo),{" "}
+              <span className="font-mono text-fg-muted">BBCA.JK</span> (Jakarta).
             </p>
           </div>
 
