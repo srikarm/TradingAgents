@@ -28,12 +28,19 @@ from email.utils import parsedate_to_datetime
 
 logger = logging.getLogger(__name__)
 
-# Free RSS feeds. Both are publicly published and meant for syndication; no
-# auth required, no rate limit beyond reasonable polling. We give a clear
-# User-Agent so the publishers can identify the source of traffic if needed.
+# Free RSS feeds. Publicly published and meant for syndication; no auth
+# required, no rate limit beyond reasonable polling. We give a clear
+# User-Agent so the publishers can identify the source of traffic.
+#
+# URL provenance: empirically probed live from inside the worker container
+# on 2026-05-19 — the original URLs shipped with PR #17 (rss.detik.com/...
+# and bisnis.com/rss/...) both returned 404 / closed-connection in
+# practice. The replacements below return 100-item feeds with current
+# Indonesian financial coverage including ticker-specific articles (e.g.
+# "Mandiri Sekuritas..." for BMRI.JK).
 _RSS_SOURCES: list[tuple[str, str]] = [
-    ("Detik Finance",     "https://rss.detik.com/index.php/finance"),
-    ("Bisnis Indonesia",  "https://www.bisnis.com/rss/finansial"),
+    ("Detik Finance",      "https://finance.detik.com/rss"),
+    ("CNBC Indonesia",     "https://www.cnbcindonesia.com/market/rss"),
 ]
 
 _USER_AGENT = "TradingAgents/0.2 (+https://github.com/TauricResearch/TradingAgents)"
