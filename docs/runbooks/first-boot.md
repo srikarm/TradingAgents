@@ -5,9 +5,10 @@ This is what to do **once** when bringing up `tradix.axiara.ai` for the very fir
 ## Prerequisites
 
 - `infra/provision.sh` has been run and printed a static IP.
-- Hostinger DNS A record for `tradix.axiara.ai` points at that IP.
-- The GitHub OAuth app has `https://tradix.axiara.ai/api/auth/callback/github` in its callback whitelist.
-- If `DEPLOY_USER` (the user the GitHub Actions deploy job SSHes in as) is non-root, that user must be in the `docker` group on the VM. After `bootstrap.sh` runs: `sudo usermod -aG docker <DEPLOY_USER>` then have that user log out and back in. The default `gcloud compute ssh` user already has docker access via GCE's default config, so this only matters if you set `DEPLOY_USER` to something other than the gcloud-default identity.
+- DNS A record for `tradix.axiara.ai` points at that IP. **Where DNS lives can differ from where the domain is registered** — `axiara.ai` is registered at Hostinger but its nameservers may be delegated to Cloudflare (`*.ns.cloudflare.com`). Check via Hostinger's `DNS / Nameservers` panel: if it says "Your domain's DNS records are currently managed elsewhere," add the record at the provider whose nameservers are active (most likely Cloudflare → `dash.cloudflare.com` → DNS → Records). For the no-Cloudflare-proxy design, set the proxy status to "DNS only" (gray cloud, not orange).
+- The GitHub OAuth app has `https://tradix.axiara.ai/api/auth/callback/github` in its callback whitelist. **If you haven't created one yet** — dev mode uses an `E2E_TEST_MODE` bypass that doesn't need a real OAuth app, so production needs a fresh one. Register at https://github.com/settings/developers → OAuth Apps → New OAuth app. Homepage: `https://tradix.axiara.ai`, Authorization callback URL: `https://tradix.axiara.ai/api/auth/callback/github`. Copy the Client ID + generated Client Secret to a password manager.
+- If `DEPLOY_USER` (the user the GitHub Actions deploy job SSHes in as) is non-root, that user must be in the `docker` group on the VM. `bootstrap.sh` chowns `/srv/tradingagents` to `$SUDO_USER` (i.e. the user who ran `sudo bash bootstrap.sh`) and group-grants `docker` on `/etc/tradingagents/`, so the gcloud-default `gcloud compute ssh` user works out of the box. If you set a different `DEPLOY_USER`, export it before running `bootstrap.sh`, and ensure it's in the `docker` group.
+- (Optional) Confirm the LLM model IDs you'll use are actually available — OpenRouter regularly retires older model variants. Query `https://openrouter.ai/api/v1/models` and look for the IDs you've set in `DEFAULT_DEEP_THINK_LLM` / `DEFAULT_QUICK_THINK_LLM`. Note: current Anthropic IDs use DOT separators (`claude-sonnet-4.6`), not dashes.
 
 ## Steps
 
@@ -26,7 +27,10 @@ This is what to do **once** when bringing up `tradix.axiara.ai` for the very fir
 
    ```bash
    gcloud compute scp /tmp/tradix.env $VM_NAME:/tmp/tradix.env --zone $GCP_ZONE
-   gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- sudo install -m 0600 -o root -g root /tmp/tradix.env /etc/tradingagents/env
+   # mode 640 + group=docker so the CI deploy user (in docker group) can read
+   # the env file without sudo. bootstrap.sh sets /etc/tradingagents/ to
+   # mode 750 root:docker for the same reason.
+   gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- sudo install -m 0640 -o root -g docker /tmp/tradix.env /etc/tradingagents/env
    gcloud compute ssh $VM_NAME --zone $GCP_ZONE -- rm /tmp/tradix.env
    shred -u /tmp/tradix.env   # local copy
    ```
