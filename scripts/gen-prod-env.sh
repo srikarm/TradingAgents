@@ -16,6 +16,10 @@ cat <<EOF
 # NextAuth
 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
 NEXTAUTH_URL=https://tradix.axiara.ai
+# Auth.js v5 requires trust-host=true for non-Vercel deployments behind a
+# reverse proxy. Without this, /api/auth/* returns "configuration error"
+# with UntrustedHost in the logs. See https://authjs.dev/getting-started/deployment
+AUTH_TRUST_HOST=true
 
 # GitHub OAuth (paste from the OAuth app's settings page)
 AUTH_GITHUB_ID=PASTE_FROM_GITHUB_OAUTH_APP
@@ -35,8 +39,10 @@ ANTHROPIC_API_KEY=
 GOOGLE_API_KEY=
 OPENROUTER_API_KEY=PASTE_FROM_OPENROUTER_DASHBOARD
 
-# Worker model defaults
+# Worker model defaults — verify availability against OpenRouter's model list
+# before deploying: https://openrouter.ai/api/v1/models. Note: Anthropic's 4.x
+# IDs use DOT separators (claude-sonnet-4.6, not claude-sonnet-4-6).
 DEFAULT_LLM_PROVIDER=openrouter
-DEFAULT_DEEP_THINK_LLM=anthropic/claude-3.5-sonnet
+DEFAULT_DEEP_THINK_LLM=anthropic/claude-sonnet-4.6
 DEFAULT_QUICK_THINK_LLM=openai/gpt-4o-mini
 EOF
