@@ -12,6 +12,13 @@ name: Deploy to tradix.axiara.ai
 on:
   push:
     branches: [main]
+    paths-ignore:
+      # Doc-only changes don't need to rebuild + redeploy. workflow_dispatch
+      # remains available if you want to force a deploy after a doc-only PR
+      # (e.g., to validate the pipeline is still healthy).
+      - '**/*.md'
+      - 'docs/**'
+      - 'PROGRESS.md'
   workflow_dispatch:
 
 concurrency:
@@ -83,20 +90,31 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           IMAGE_TAG: ${{ github.sha }}
+        # Pattern: `ssh host "ENV=val bash -s" <<'REMOTE' ... REMOTE`. The outer
+        # double-quoted command string lets us inject the IMAGE_TAG SHA from the
+        # workflow runner's env; `bash -s` reads the heredoc body from stdin. The
+        # heredoc is quoted (<<'REMOTE'), so no local variable expansion happens
+        # inside it — only the remote shell expands $IMAGE_TAG, which was set by
+        # the wrapping command string. This avoids the multi-line argument-
+        # splitting bug that produces `bash: -c: option requires an argument`.
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -lc "
-            set -euo pipefail
-            cd /srv/tradingagents
-            git fetch --all
-            # VM repo is a read-only mirror of main; reset --hard is safer
-            # than --ff-only on CI-managed state.
-            git reset --hard origin/main
-            export IMAGE_TAG=$IMAGE_TAG
-            echo \"\$IMAGE_TAG\" > .current_image_tag
-            docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml pull
-            docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
-            docker image prune -f
-          "
+          # shellcheck disable=SC2029
+          # $IMAGE_TAG intentionally expands on the workflow runner so the SHA
+          # flows into the remote shell via a single-quoted assignment. The
+          # single quotes are inside the double-quoted ssh-command argument
+          # so the value is literal-safe even if a future tag had special chars.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "IMAGE_TAG='$IMAGE_TAG' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /srv/tradingagents
+          git fetch --all
+          # VM repo is a read-only mirror of main; reset --hard is safer
+          # than --ff-only on CI-managed state.
+          git reset --hard origin/main
+          echo "$IMAGE_TAG" > .current_image_tag
+          docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml pull
+          docker compose --env-file /etc/tradingagents/env -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+          docker image prune -f
+          REMOTE
 
       - name: Smoke test
         env:
