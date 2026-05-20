@@ -2,37 +2,42 @@
 
 ## Current State
 
-- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `23e3c12`)
+- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `994907e`)
+- **Production URL:** **https://tradix.axiara.ai** — live on GCP Compute Engine, single-VM docker-compose stack, ~$26/mo
 - **Tests:** 159 server tests passing + 21 library tests (5 prior + 16 Indonesia news tests from PR #17)
-- **PRs merged:** 18 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (PR #15) + 1 UI modernization (PR #16) + 1 Indonesia stock support (PR #17) + 1 RSS hotfix (PR #18)
-- **v3+ followups remaining:** 0 of 12 — entire dashboard-wave-3 deferred list closed 🎉
+- **PRs merged:** 19 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (PR #15) + 1 UI modernization (PR #16) + 1 Indonesia stock support (PR #17) + 1 RSS hotfix (PR #18) + 1 production deploy (PR #19)
+- **GCP deploy (PR #19 + Phase 2-4 hot-fixes):** Single `e2-medium` VM in `asia-southeast2-a`, Caddy reverse proxy + auto Let's Encrypt cert, GitHub Actions → ghcr.io → SSH-pull CI/CD, daily 03:00 ICT backups to `gs://tradix-backups/` (14-day lifecycle, restore drill validated). OpenRouter (`anthropic/claude-sonnet-4.6` + `openai/gpt-4o-mini`) as the prod LLM gateway.
 - **Indonesia (IDX) support (PRs #17 + #18):** `.JK` ticker routing → Indonesian RSS news source (Detik, Kompas, Bisnis, Investasi) + `^JKSE` benchmark mapping + Launch-form IDX hint. Hotfix #18 swapped four dead RSS URLs for live ones.
-- **Production worker bugs from PR #15 hotfix:** worker model imports + stream_mode duplicate kwarg — both fixed with regression tests, end-to-end verified.
 - **Dashboard UI modernization (PR #16):** Tailwind + Axiara AI brand palette + glass design system applied across every page. Inter + JetBrains Mono fonts, Lucide icons, dark-only OLED palette.
 
 | Metric | Value |
 |---|---|
-| Local main HEAD | `23e3c12` (Merge PR #18) |
-| Most recent PR | #18 — `hotfix(dataflows): swap dead Indonesia RSS URLs for live ones`, merged 2026-05-19 10:33 UTC |
+| Local main HEAD | `994907e` (Merge PR #19) |
+| Most recent PR | #19 — `feat(deploy): production deploy machinery for tradix.axiara.ai`, merged 2026-05-20 |
+| Production URL | https://tradix.axiara.ai |
+| GCP VM | `tradix` (e2-medium, asia-southeast2-a, static IP `34.50.106.35`) |
+| Backup bucket | `gs://tradix-backups/` (14-day lifecycle, daily 03:00 ICT cron) |
 | Server test suite | 159 pass / 1 deselected |
 | Library test suite | 21 pass in scoped runs (5 prior + 16 new Indonesia tests); pre-existing root collection errors unrelated |
 | Working tree | only `docker-compose.yml` + `uv.lock` drift + `.DS_Store`/build artifacts untracked |
-| Active branches ahead of main | none |
+| Active branches ahead of main | `chore/progress-md-gcp-deploy` (this PR) |
 
 ## What To Do Next
 
-**Dashboard fully shipped + modernized + Indonesia market support added.** All 18 PRs merged. Active focus: **make the system deployable to Google Cloud and/or a VPS** so the dashboard is reachable beyond a local dev laptop.
+**Dashboard fully shipped + modernized + Indonesia market support + production deploy live.** All 19 PRs merged. Active focus: open. Pick from the followup PR queue or a new feature direction.
 
-External / account-level blocker (not a code issue):
-- **OpenAI quota** — every demo run hits HTTP 429 `insufficient_quota`. To exercise a SUCCEEDED run end-to-end, either top up the OpenAI account (`sk-proj-…` key in `.env`) or swap to Anthropic / Google by adding the matching `*_API_KEY` to `.env` and setting `default_llm_provider` accordingly.
+External / account-level note (no longer blocking demos — OpenRouter is the prod default and works):
+- **OpenAI quota** — direct OpenAI calls still 429. Prod uses OpenRouter (`anthropic/claude-sonnet-4.6` for deep-think, `openai/gpt-4o-mini` for quick-think) which has no quota issue. To use OpenAI direct again, top up the account.
 
 Possible next directions (none gated; just suggestions):
-- **🚀 Cloud + VPS deployment (active)** — currently the only way to run the system is `docker compose up` locally. Goal: package the existing `docker-compose.yml` stack (api / db / redis / web / worker) so it runs on Google Cloud and/or a VPS, with managed secrets for LLM API keys, persistent storage for the reports volume + Postgres, HTTPS + a domain, and a repeatable deploy from `main`. Architecture decision pending: managed services (Cloud Run + Cloud SQL + Memorystore) vs single VM (Compute Engine / Hetzner running docker-compose). See the deployment plan doc in `docs/superpowers/plans/` once brainstorming completes.
+- **✅ Cloud + VPS deployment (shipped)** — `https://tradix.axiara.ai` live on GCP. Single-VM docker-compose, Caddy + Let's Encrypt, GitHub Actions auto-deploy on push to main, daily GCS backups with 14-day retention, restore drill validated. The compose stack remains VPS-portable if you ever want to switch providers (e.g., Hetzner CX22 for ~$5/mo vs GCP e2-medium for ~$25/mo). See [`docs/deployment.md`](docs/deployment.md) and the design + plan docs in `docs/superpowers/plans/`.
+- **🛠️ GCP-deploy followup PR (pending)** — small consolidated PR to bake the Phase 2-4 hot-fixes into the repo so future deploys don't need manual VM patching. Items: bootstrap.sh perms (chown /srv/tradingagents to deploy user + chgrp docker + chmod 750/640 on /etc/tradingagents/), `scripts/gen-prod-env.sh` template (add `AUTH_TRUST_HOST=true`, swap default LLM to `claude-sonnet-4.6`), fix misleading `AUTH_TRUST_HOST` comment in dev compose override, fix multi-line ssh quoting in `.github/workflows/deploy.yml`.
 - **More international markets** — momentum from PR #17 suggests extending the same pattern to other non-US exchanges (LSE `.L`, TSE `.T`, BVMF `.SA`, etc.). Each = benchmark mapping + region-appropriate news source + Launch-form hint update.
 - **CLI / worker `_persist_reports` unification** — out-of-scope from PR #14: switch `server/app/workers/tasks.py:_persist_reports` to call the canonical `tradingagents.reports.save_report_to_disk` instead of maintaining its subset. Behavior change (worker would start writing the full 5-tier layout including risk + portfolio + consolidated report); needs a design decision.
 - **Light-mode variant** — currently dark-only per the Axiara brand guidelines. Adding light mode = define `:root[data-theme="light"]` with inverted tokens + a theme toggle.
 - **Polish `TickerPriceChart` + `DecisionTimeline`** — legacy inline styles still on the `/portfolio/[ticker]` route per PR #16 scope note.
 - **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.) — orthogonal to all current work; fixing them unblocks end-to-end library testing.
+- **Cloudflare proxy** — deferred from v1 design. Easy add later: switch the Hostinger→Cloudflare DNS record from gray-cloud (DNS-only) to orange-cloud (proxied). Caddy stays on the origin; either configure Cloudflare SSL "Full (strict)" to validate the origin's Let's Encrypt cert, or switch Caddy to DNS-01 ACME challenge.
 
 ---
 
@@ -67,6 +72,50 @@ Possible next directions (none gated; just suggestions):
 - **Why this matters as a pattern:** The whole "support exchange X" recipe is now well-defined: (1) add benchmark mapping in `tradingagents/default_config.py`, (2) write a region-specific news source under `tradingagents/dataflows/`, (3) add a ticker-suffix route in `get_news_for_ticker`, (4) update the Launch form hint, (5) pin every piece with tests. Same recipe will scale to LSE / TSE / BVMF.
 - **Process note:** The code-review followup (`83fdac1`) caught a real semantic bug — substring match on `"BCA"` would incorrectly match `"BCAA"`. Word-boundary regex is the safer default for ticker→news relevance and worth applying retroactively if the US source ever shows the same false-positive pattern.
 - **Post-merge state:** local main fast-forwarded to `23e3c12`; server suite still 159/1 (no server code touched); library suite for new module: 16 pass scoped run.
+
+---
+
+## Checkpoint 2026-05-20 (Phase 2-4 — production deploy live at `tradix.axiara.ai`)
+
+**Session pattern:** Hybrid execution — Phase 1 was subagent-driven (yesterday, merged via PR #19 at `994907e`); Phases 2-4 today were human-driven cloud ops with me as co-pilot. Two pause/resume cycles via `.continue-here.md` survived overnight (billing-account closed → reactivated, then secrets-misadded → re-set via `gh secret set`).
+
+**Phase 2 — cloud bootstrap (Tasks 11-17):**
+- `infra/provision.sh` created VM (`tradix`, e2-medium, asia-southeast2-a), static IP `34.50.106.35`, GCS bucket `tradix-backups` with 14-day lifecycle, service account `tradix-vm@tradix-axiara.iam` scoped to objectAdmin on the bucket only, 3 firewall rules. ~3 min total.
+- DNS surprise: `axiara.ai` nameservers point at Cloudflare (not Hostinger as the plan assumed). Resolved by adding the A record `tradix → 34.50.106.35` in the Cloudflare dashboard as **DNS-only / gray cloud** — preserves the design's "no Cloudflare proxy in v1" decision while accommodating where DNS actually lives.
+- GitHub OAuth surprise: project had no real OAuth app — dev sign-in uses the E2E_TEST_MODE credentials-provider bypass per the security note already in memory (obs 21319). Created a fresh OAuth app for prod (`Authorization callback URL: https://tradix.axiara.ai/api/auth/callback/github`), copied Client ID + Secret to the prod env file.
+- `infra/bootstrap.sh` ran cleanly on the VM. GCE Debian 12 image already had Docker pre-installed and the gcloud-default user (`erikgunawansupriatna`) already in the `docker` group — one of the "M9 docker-group" footguns from Phase 1's code review was a no-op for our user. Installed fail2ban with `[sshd]` jail, disabled password SSH, cloned repo to `/srv/tradingagents` (as root, which became a Phase 3 problem), set up cron.
+- `scripts/gen-prod-env.sh` generated the env locally with fresh NEXTAUTH_SECRET + POSTGRES_PASSWORD; user filled in 3 placeholders (Client ID, Client Secret, OpenRouter API key) via `python3 -c "import getpass..."` in a real Terminal (not via `!` prefix — the Claude Code session lacks a TTY so getpass throws `termios.error: Operation not supported by device`). scp + install + shred all clean.
+- First bring-up: Caddy fetched a Let's Encrypt cert via HTTP-01 challenge in ~6 seconds (5 multi-perspective validators confirmed). External `https://tradix.axiara.ai` → 200/307 with a valid LE cert (`/C=US/O=Let's Encrypt/CN=E7`).
+- Two NextAuth issues caught + fixed during smoke testing:
+  - **AUTH_TRUST_HOST missing** → `/api/auth/providers` returned "configuration error" with `UntrustedHost` in the logs. Auth.js v5 docs explicitly require `AUTH_TRUST_HOST=true` for non-Vercel self-hosted deployments behind a reverse proxy. (The dev compose override has a misleading "NEVER set this in production" comment — flagged for the followup PR.) Fix: append `AUTH_TRUST_HOST=true` to `/etc/tradingagents/env`, recreate containers.
+  - **`anthropic/claude-3.5-sonnet` deprecated on OpenRouter** → BMRI.JK run failed at the Bull/Bear Researcher step with `404 - No endpoints found for anthropic/claude-3.5-sonnet`. The 3.x family has been deprecated as 4.x rolled out; only 3-haiku and 3.5-haiku survive in the listing. Also caught a naming-format gotcha: OpenRouter's current Anthropic IDs use **DOT separators** (`claude-sonnet-4.6`, not `claude-sonnet-4-6` as a dash-naming convention would suggest). Fix: swap `DEFAULT_DEEP_THINK_LLM` to `anthropic/claude-sonnet-4.6` (the cost-aware sweet spot at $3/$15 per Mtok vs Opus 4.7 at $5/$25). BMRI.JK rerun succeeded end-to-end through Risk Analysis + Trade Decision.
+
+**Phase 3 — CI/CD (Tasks 18-20):**
+- Generated `ed25519` deploy key locally, public key installed on VM (3rd entry in authorized_keys), direct SSH from laptop using the key verified working.
+- First `workflow_dispatch` failed at "Configure SSH" with empty `DEPLOY_SSH_KEY`/`DEPLOY_HOST` — user had added secrets to a wrong scope/tab in GitHub's settings (Actions/Codespaces/Dependabot/Environment-scoped secret pages all look similar). Authoritative fix: set all 3 via `gh secret set --repo ...` which is unambiguous about scope. `gh secret list --json` then confirmed all 3 names present with timestamps.
+- Second deploy attempt got past SSH but failed at "Pull + restart on VM" with **git "dubious ownership"** error — bootstrap.sh's `chown -R root:root /srv/tradingagents` blocked the deploy user from running git ops. Hot-fix on the VM (NOT a workflow change yet — that's in the followup PR):
+  - `sudo chown -R erikgunawansupriatna:erikgunawansupriatna /srv/tradingagents` — deploy user owns the repo
+  - `sudo git config --system --add safe.directory /srv/tradingagents` — belt-and-suspenders
+  - `sudo chgrp docker /etc/tradingagents && sudo chmod 750 /etc/tradingagents` — deploy user (in docker group) can traverse into the dir
+  - `sudo chgrp docker /etc/tradingagents/env && sudo chmod 640 /etc/tradingagents/env` — and read the env file
+  - Trust boundary: docker-group already grants effective root via the socket, so loosening env-file readability to that group doesn't widen the attack surface beyond what already exists.
+- Third deploy: **all green.** Build api + Build web in parallel via matrix (~16-44s each via gha cache), Deploy job pulled SHA-tagged images, recreated containers, wrote `/srv/tradingagents/.current_image_tag` = `994907e8...`, smoke test on `/api/auth/providers` returned 200. Running containers now reference `ghcr.io/erikgunawans/tradingagents-{api,web}:994907e8...` (not floating `:latest`), so rollback to any prior SHA works via `IMAGE_TAG=<prev-sha> docker compose ... up -d`.
+- Workflow annotations (non-blocking, queued for followup PR): Node 20 deprecation on the action runtimes (June 2026 deadline), `SecretsUsedInArgOrEnv` warning on web/Dockerfile (3 instances of build-time ENV declarations — at build time they get empty values from the workflow env, so no secrets actually bake into the image, but the pattern is worth tightening), the cosmetic `bash: -c: option requires an argument` from the multi-line ssh command (heredoc-over-stdin is the clean fix).
+
+**Phase 4 — backups (Tasks 21-22):**
+- Manual run of `/usr/local/bin/tradix-backup.sh` succeeded in ~12 sec. Both artifacts uploaded: `gs://tradix-backups/db/db-20260520-184941.sql.gz` + `gs://tradix-backups/reports/reports-20260520-184941.tgz`. 14-day delete-after-age lifecycle confirmed (one false alarm where I queried the wrong field name in `gcloud storage buckets describe`).
+- **Restore drill**: pulled the freshest db dump, created scratch DB `restore_drill`, `gunzip | psql`, ran `SELECT count(*) FROM runs` → returned 2, matching live DB row count exactly. The two runs in the dump told the day's story: the failed BMRI.JK at 17:38 (claude-3.5-sonnet 404) and the succeeded BMRI.JK at 17:57 (after the model swap). Disaster recovery validated for both happy + failure paths. Scratch DB dropped, local artifacts cleaned.
+
+**Cost summary:** ~$26/mo VM + ~$1.50/mo static IP + ~$0.10/mo backup storage = **~$28/mo ongoing**. (Compared to Cloud Run + Cloud SQL + Memorystore option C from the brainstorming which would have been ~$105-125/mo with significant refactoring.)
+
+**Sequencing learning:** the two-stage code review from Phase 1 caught critical bugs (compose env interpolation, hardcoded DATABASE_URL) that would've manifested as silent prod issues. But the review couldn't catch deploy-time-only problems — `AUTH_TRUST_HOST`, OpenRouter model deprecation, git dubious-ownership, env file traverse perms all surfaced only when running against real infrastructure. Worth noting: subagent review value is highest for code that COMPILES + RUNS in isolation (libraries, scripts); for infra/deploy work, hands-on cloud iteration is irreplaceable.
+
+**Followups queued in a single small PR (post-merge of this one):**
+1. `bootstrap.sh` perms: bake in `chown $DEPLOY_USER /srv/tradingagents` + `chgrp docker /etc/tradingagents/{,env}` + `chmod 750/640` so future deploys don't need the manual hot-fix.
+2. `scripts/gen-prod-env.sh` template: add `AUTH_TRUST_HOST=true`, update `DEFAULT_DEEP_THINK_LLM` default to `anthropic/claude-sonnet-4.6`.
+3. `docker-compose.override.yml`: fix misleading "NEVER set this in production" comment on `AUTH_TRUST_HOST`.
+4. `.github/workflows/deploy.yml`: replace multi-line `ssh ... bash -lc "..."` with heredoc-over-stdin to eliminate the `bash: -c: option requires an argument` cosmetic warning.
+5. (Optional) `docs/runbooks/first-boot.md`: add a "verify model IDs against OpenRouter's `/api/v1/models` before deploying" note + a "DNS may be at a third party (Cloudflare/Route53/...) even when the registrar is Hostinger" note.
 
 ---
 
