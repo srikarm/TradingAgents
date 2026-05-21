@@ -1,9 +1,5 @@
-import uuid
-
 import jwt
 from fastapi import Depends, Header, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -41,26 +37,25 @@ async def get_current_user(
     authorization: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    from app.models.user import find_or_create_by_identity
+
     payload = _decode_token(_extract_token(authorization))
-    github_id = payload.get("sub")
-    if not github_id:
+    sub = payload.get("sub")
+    email = payload.get("email")
+    provider = payload.get("provider") or "github"  # legacy default
+
+    if not sub:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "unauthenticated"},
         )
-    email = payload.get("email")
-    user = (
-        await db.execute(select(User).where(User.github_id == github_id))
-    ).scalar_one_or_none()
-    if user is not None:
-        return user
-    user = User(id=uuid.uuid4(), github_id=github_id, email=email)
-    db.add(user)
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        user = (
-            await db.execute(select(User).where(User.github_id == github_id))
-        ).scalar_one()
-    return user
+
+    github_id = sub if provider in ("github", "e2e") else None
+    google_sub = sub if provider == "google" else None
+
+    return await find_or_create_by_identity(
+        db,
+        email=email,
+        github_id=github_id,
+        google_sub=google_sub,
+    )
