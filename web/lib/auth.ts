@@ -1,5 +1,6 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import GitHub from "next-auth/providers/github";
+import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 
 const secret = process.env.NEXTAUTH_SECRET;
@@ -10,9 +11,22 @@ const providers: NextAuthConfig["providers"] = [
     clientId: process.env.AUTH_GITHUB_ID!,
     clientSecret: process.env.AUTH_GITHUB_SECRET!,
   }),
+  Google({
+    clientId: process.env.AUTH_GOOGLE_ID!,
+    clientSecret: process.env.AUTH_GOOGLE_SECRET!,
+  }),
 ];
 
+// Dev-only credentials backdoor. Hard-fails if it ever sees production —
+// guards against env-var drift (E2E_TEST_MODE=1 leaking into prod) per
+// the design spec §3 and the 13 memory observations flagging this risk.
 if (process.env.E2E_TEST_MODE === "1") {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "E2E_TEST_MODE=1 cannot run with NODE_ENV=production. " +
+        "This guards the credentials-provider backdoor from env-var drift."
+    );
+  }
   providers.push(
     Credentials({
       name: "e2e",
@@ -29,27 +43,37 @@ if (process.env.E2E_TEST_MODE === "1") {
 export const authConfig: NextAuthConfig = {
   providers,
   session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
   jwt: {
     // HS256 by default — matches server/app/auth.py
   },
   callbacks: {
-    async jwt({ token, profile, user }) {
-      // GitHub login (interactive): profile.id is numeric.
-      if (profile && (profile as { id?: number | string }).id !== undefined) {
-        token.sub = String((profile as { id: number | string }).id);
+    async jwt({ token, account, profile, user }) {
+      if (account?.provider === "google" && profile) {
+        const p = profile as { sub: string; email: string };
+        token.sub = String(p.sub);
+        token.email = p.email;
+        (token as { provider?: string }).provider = "google";
+      } else if (account?.provider === "github" && profile) {
+        const p = profile as { id: number | string; email?: string };
+        token.sub = String(p.id);
+        if (p.email) token.email = p.email;
+        (token as { provider?: string }).provider = "github";
       } else if (user && process.env.E2E_TEST_MODE === "1") {
-        // E2E credentials login: `user.id` is the supplied githubId.
         token.sub = String(user.id);
-      }
-      if (profile && (profile as { email?: string }).email) {
-        token.email = (profile as { email: string }).email;
-      } else if (user?.email) {
-        token.email = user.email;
+        if (user.email) token.email = user.email;
+        (token as { provider?: string }).provider = "e2e";
       }
       return token;
     },
     async session({ session, token }) {
-      if (token.sub) (session.user as { githubId?: string }).githubId = token.sub;
+      if (token.sub) {
+        const u = session.user as { providerId?: string; githubId?: string };
+        u.providerId = token.sub;
+        // Legacy alias — kept for code paths that still read githubId.
+        // Remove in a later refactor once consumers migrate to providerId.
+        u.githubId = token.sub;
+      }
       return session;
     },
   },
