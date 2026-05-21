@@ -39,10 +39,12 @@ The Wave 4 item 2 + 3 implementers each landed in a worktree that was initialize
 ```bash
 pwd                                                              # MUST start with `.claude/worktrees/agent-`
 git rev-parse --abbrev-ref HEAD                                  # MUST start with `worktree-agent-` or `agent-` (not `main`)
-git -C /Users/erikgunawansupriatna/TradingAgents rev-parse main  # MUST be d009119... (plan-commit SHA) — unchanged
+git -C /Users/erikgunawansupriatna/TradingAgents rev-parse main  # MUST equal the plan-commit SHA the dispatcher passed in the spawn message — unchanged
 ```
 
-If ANY check fails, STOP and report BLOCKED. If your worktree's HEAD is at an unrelated upstream SHA (e.g., `61522e1`), the first remediation is `git fetch --all && git reset --hard d009119` BEFORE writing any code.
+The dispatcher (the parent session that spawns you) will quote the **plan-commit SHA** in your spawn message — that's the SHA `main` was at the instant you were dispatched. Treat it as the only authoritative value; do NOT hardcode SHAs from this file (they're hints and may drift after amends).
+
+If ANY check fails, STOP and report BLOCKED. If your worktree's HEAD is at an unrelated upstream SHA (e.g., `61522e1`), the first remediation is `git fetch --all && git reset --hard <dispatcher-provided-SHA>` BEFORE writing any code.
 
 ---
 
@@ -61,7 +63,7 @@ git checkout main
 git pull fork main
 ```
 
-Expected: `Already up to date.` or fast-forward to fork/main HEAD (which includes `d009119` — the watchlists plan).
+Expected: `Already up to date.` or fast-forward to fork/main HEAD (which includes this plan doc).
 
 - [ ] **Step 2: Create the feature branch**
 
