@@ -2,13 +2,13 @@ import uuid as _uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.config import get_settings
 from app.db import get_db
-from app.models.run import Run
+from app.models.run import Run, RunStatus
 from app.models.user import User
 from app.schemas.run import RunCreate, RunDetailOut, RunListOut, RunOut, RunTailOut
 from app.services.log_tailer import tail_log
@@ -72,6 +72,26 @@ async def create_run(
             },
         )
     return {"run_id": str(run.id)}
+
+
+@router.get("/active/count")
+async def count_active_runs(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, int]:
+    """Count of runs for the current user that are still QUEUED or RUNNING.
+
+    Polled every 10s by web/components/RunsBadge.tsx to show the in-progress
+    count in the nav. Filtered by user_id + status enum — both indexed — so
+    sub-millisecond even at small-group scale.
+    """
+    result = await db.execute(
+        select(func.count())
+        .select_from(Run)
+        .where(Run.user_id == user.id)
+        .where(Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]))
+    )
+    return {"count": result.scalar_one()}
 
 
 @router.get("/{run_id}", response_model=RunDetailOut)
