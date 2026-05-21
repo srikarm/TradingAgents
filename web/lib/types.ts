@@ -77,3 +77,4 @@ export type PortfolioCurveOut = components["schemas"]["PortfolioCurveOut"];
 export type OHLCVBar = components["schemas"]["OHLCVBar"];
 export type DecisionPin = components["schemas"]["DecisionPin"];
 export type TickerDetailOut = components["schemas"]["TickerDetailOut"];
+export type WatchlistItemOut = components["schemas"]["WatchlistItemOut"];
