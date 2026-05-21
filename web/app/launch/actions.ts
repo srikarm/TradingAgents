@@ -42,5 +42,6 @@ export async function launchRunAction(formData: FormData): Promise<LaunchFormErr
   }
 
   // Outside try: redirect() throws NEXT_REDIRECT, must not be caught.
-  redirect(`/live/${runId}`);
+  const watchLive = formData.get("watch_live") === "on";
+  redirect(watchLive ? `/live/${runId}` : "/history");
 }

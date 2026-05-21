@@ -141,6 +141,20 @@ export default function LaunchForm() {
         </div>
       </SectionCard>
 
+      <label className="mt-4 flex items-start gap-2 text-sm text-fg-muted cursor-pointer">
+        <input
+          type="checkbox"
+          name="watch_live"
+          className="mt-0.5 h-4 w-4 rounded border-border bg-surface/40 text-brand focus:ring-2 focus:ring-brand/40"
+        />
+        <span>
+          Watch live
+          <span className="ml-2 text-xs text-fg-subtle">
+            — stream the worker's log as it runs. Otherwise you land on History and can open it later.
+          </span>
+        </span>
+      </label>
+
       {/* Action bar — right-aligned button + inline error left of it.
        * Matches the "action rail" pattern of /history's header actions. */}
       <div className="mt-2 flex flex-col-reverse items-stretch justify-end gap-3 sm:flex-row sm:items-center">
