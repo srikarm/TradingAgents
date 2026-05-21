@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi import Path as PathParam
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -17,7 +17,7 @@ from app.schemas.watchlist import (
     WatchlistItemOut,
     WatchlistNotesUpdate,
 )
-from app.services.user_root import TICKER_RE, check_segment
+from app.services.user_root import TICKER_RE
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -38,16 +38,15 @@ async def list_watchlist(
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)
 async def add_to_watchlist(
-    body: WatchlistAdd,
+    body: WatchlistAdd = Body(...),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> WatchlistItem:
-    """Add a ticker to the watchlist. 409 on duplicate, 422 on invalid ticker."""
-    try:
-        check_segment("ticker", body.ticker, TICKER_RE)
-    except ValueError:
-        raise HTTPException(status_code=422, detail={"error": "invalid ticker", "ticker": body.ticker})
+    """Add a ticker to the watchlist. 409 on duplicate, 422 on invalid ticker.
 
+    Ticker validation lives in WatchlistAdd's pydantic pattern — invalid
+    input never reaches this handler (FastAPI returns 422 first).
+    """
     item = WatchlistItem(
         id=uuid.uuid4(),
         user_id=user.id,
@@ -69,12 +68,13 @@ async def add_to_watchlist(
             status_code=409,
             detail={"error": "ticker already on watchlist", "ticker": body.ticker},
         )
+    await db.commit()
     return item
 
 
 @router.patch("/{ticker}", response_model=WatchlistItemOut)
 async def update_notes(
-    body: WatchlistNotesUpdate,
+    body: WatchlistNotesUpdate = Body(...),
     ticker: str = PathParam(..., pattern=TICKER_RE.pattern),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -93,6 +93,7 @@ async def update_notes(
             status_code=404, detail={"error": "ticker not on watchlist"}
         )
     item.notes = body.notes
+    await db.commit()
     return item
 
 
@@ -109,6 +110,7 @@ async def remove_from_watchlist(
             WatchlistItem.ticker == ticker,
         )
     )
+    await db.commit()
     if result.rowcount == 0:
         raise HTTPException(
             status_code=404, detail={"error": "ticker not on watchlist"}

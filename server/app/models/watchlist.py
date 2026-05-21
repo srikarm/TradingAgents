@@ -1,8 +1,7 @@
 import uuid
 from datetime import datetime
 
-import sqlalchemy as sa
-from sqlalchemy import DateTime, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -13,7 +12,7 @@ class WatchlistItem(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        sa.ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     ticker: Mapped[str] = mapped_column(String(32))
     notes: Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WatchlistItemOut(BaseModel):
@@ -10,11 +10,14 @@ class WatchlistItemOut(BaseModel):
     notes: str | None
     added_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WatchlistAdd(BaseModel):
-    ticker: str = Field(..., min_length=1, max_length=32)
+    # Ticker pattern mirrors app.services.user_root.TICKER_RE — uppercase
+    # alnum + . / - , 1-12 chars. Enforced here (Pydantic returns 422 on
+    # mismatch) so the router doesn't need a redundant manual check.
+    ticker: str = Field(..., pattern=r"^[A-Z][A-Z0-9.\-]{0,11}$")
     notes: str | None = Field(default=None, max_length=500)
 
 

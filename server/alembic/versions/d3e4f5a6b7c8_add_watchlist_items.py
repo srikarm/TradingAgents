@@ -16,10 +16,10 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "watchlist_items",
-        sa.Column("id", sa.UUID(), primary_key=True),
+        sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column(
             "user_id",
-            sa.UUID(),
+            sa.Uuid(),
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
         ),

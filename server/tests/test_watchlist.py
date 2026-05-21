@@ -1,17 +1,17 @@
 # server/tests/test_watchlist.py
 """End-to-end tests of /watchlist endpoints (CRUD + scoping).
 
-Fixture choice: `async_client_authed` and `authed_user` are defined inline
-here (not in conftest.py) following the precedent set by
-`test_runs_active_count.py` (Wave 4 item 2). The shared conftest provides
-only `db_session` and `make_jwt`; per-test-file fixtures inline the
-`get_db` override + bearer-token client wrapper.
+`async_client_authed` and `authed_user` are inlined here (not in conftest.py)
+because they bind a test-file-specific JWT subject; the shared conftest
+provides only `db_session` and `make_jwt`.
 """
 import uuid
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import get_settings
 from app.db import get_db
@@ -34,12 +34,31 @@ async def authed_user(db_session) -> User:
 
 @pytest_asyncio.fixture
 async def async_client_authed(db_session, authed_user):
-    """An httpx AsyncClient with Authorization header pre-set."""
+    """An httpx AsyncClient with Authorization header pre-set.
+
+    `get_db` is overridden to yield a NEW session per request, bound to the
+    same engine as `db_session`. This mirrors production semantics (session
+    closed and rolled-back if not committed) — critical for the
+    persistence test, which would otherwise pass even when the router skips
+    `db.commit()`, because a shared session keeps uncommitted writes visible
+    until fixture teardown.
+
+    The `authed_user` row created by the `authed_user` fixture must be
+    visible to the request session — that's why we commit it before any
+    request runs.
+    """
     # Clear LRU cache so stale NEXTAUTH_SECRET from prior tests doesn't bleed in.
     get_settings.cache_clear()
 
+    # Make sure the authed_user row is committed so the per-request session
+    # can resolve it via get_current_user.
+    await db_session.commit()
+
+    request_factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
     async def _override_db():
-        yield db_session
+        async with request_factory() as s:
+            yield s
 
     app.dependency_overrides[get_db] = _override_db
     token = make_jwt(GITHUB_ID)
@@ -159,12 +178,43 @@ async def test_delete_missing_ticker_returns_404(async_client_authed):
 
 
 @pytest.mark.asyncio
+async def test_add_persists_across_sessions(
+    async_client_authed, db_session, authed_user
+):
+    """POST writes survive session close — guards against missing-commit regressions.
+
+    Without `await db.commit()` in the router, the flushed row is rolled back
+    when the per-request session closes. A fresh session opened on the same
+    engine would then see no row, even though the HTTP response was 201.
+    """
+    res = await async_client_authed.post("/watchlist", json={"ticker": "PERSIST"})
+    assert res.status_code == 201
+
+    # Open a fresh session bound to the SAME engine used by db_session.
+    # We can't use app.db.get_session_factory() because that builds a new
+    # engine from settings (a different :memory: DB). db_session.bind is
+    # the test fixture's engine — which is what the dependency override
+    # routes the router's writes through.
+    fresh_factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    async with fresh_factory() as fresh:
+        row = (
+            await fresh.execute(
+                select(WatchlistItem).where(
+                    WatchlistItem.user_id == authed_user.id,
+                    WatchlistItem.ticker == "PERSIST",
+                )
+            )
+        ).scalar_one_or_none()
+        assert row is not None, "POST returned 201 but the row was not committed"
+
+
+@pytest.mark.asyncio
 async def test_scoped_to_current_user(async_client_authed, db_session, authed_user):
     """Another user's watchlist rows are invisible — current user sees only their own."""
-    other = User(id=uuid.uuid4(), github_id="other-user-999", email=None)
+    other = User(id=uuid.uuid4(), github_id="other-user-999")
     db_session.add(other)
     db_session.add(WatchlistItem(id=uuid.uuid4(), user_id=other.id, ticker="OTHER"))
-    await db_session.flush()
+    await db_session.commit()
     # Current user adds their own ticker:
     await async_client_authed.post("/watchlist", json={"ticker": "OWN"})
 
