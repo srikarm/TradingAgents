@@ -42,6 +42,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """
+    WARNING: This downgrade is one-way safe ONLY on a database that has
+    never had a Google-only user (i.e., a user row where github_id IS NULL).
+    The ALTER COLUMN github_id NOT NULL step below will fail on PostgreSQL
+    if any such row exists.
+
+    If you need to roll back after Google sign-ins have happened, first
+    decide on a strategy for the NULL-github_id rows (delete them, copy
+    google_sub into github_id as a sentinel, or skip the NOT NULL restore).
+    """
     op.drop_index("ix_users_email_unique", "users")
     op.drop_index("ix_users_google_sub_unique", "users")
     op.drop_index("ix_users_google_sub", "users")
