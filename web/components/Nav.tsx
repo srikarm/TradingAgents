@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Activity, History, PlayCircle, PieChart } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/cn";
+import RunsBadge from "@/components/RunsBadge";
 
 const NAV_ITEMS = [
   { href: "/history", label: "History", icon: History },
@@ -64,6 +65,7 @@ export default function Nav() {
 
         {githubId && (
           <div className="flex items-center gap-3 text-[12px]">
+            <RunsBadge />
             <span className="hidden text-fg-subtle sm:inline">
               <span className="text-fg-subtle">gh:</span>
               <span className="font-mono text-fg-muted">{githubId}</span>
