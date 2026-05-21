@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, History, PlayCircle, PieChart } from "lucide-react";
+import { Activity, Bookmark, History, PlayCircle, PieChart } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/cn";
 import RunsBadge from "@/components/RunsBadge";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/live", label: "Live", icon: Activity },
   { href: "/launch", label: "Launch", icon: PlayCircle },
   { href: "/portfolio", label: "Portfolio", icon: PieChart },
+  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
 ];
 
 export default function Nav() {

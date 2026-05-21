@@ -128,7 +128,7 @@ export default function WatchlistTable({
                         setEditing(item.ticker);
                         setEditNotes(item.notes ?? "");
                       }}
-                      className="flex w-full items-start gap-2 text-left hover:text-fg"
+                      className="group flex w-full items-start gap-2 text-left hover:text-fg"
                     >
                       <span className={cn(item.notes ? "" : "italic text-fg-subtle")}>
                         {item.notes || "Click to add notes"}
