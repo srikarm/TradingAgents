@@ -217,7 +217,7 @@ export default function TickerChartWorkspace({
     };
   }, [bars, decisions, interval]);
 
-  function setInterval(next: "1d" | "1h") {
+  function handleIntervalChange(next: "1d" | "1h") {
     const url = new URL(window.location.href);
     if (next === "1d") {
       url.searchParams.delete("interval");
@@ -251,13 +251,14 @@ export default function TickerChartWorkspace({
         </div>
         <div
           role="tablist"
+          aria-label="Chart interval"
           className="inline-flex items-center rounded-md border border-border/60 bg-surface/40"
         >
           <button
             type="button"
             role="tab"
             aria-selected={interval === "1d"}
-            onClick={() => setInterval("1d")}
+            onClick={() => handleIntervalChange("1d")}
             className={cn(
               "px-2.5 py-1 text-xs transition-colors",
               interval === "1d"
@@ -271,7 +272,7 @@ export default function TickerChartWorkspace({
             type="button"
             role="tab"
             aria-selected={interval === "1h"}
-            onClick={() => setInterval("1h")}
+            onClick={() => handleIntervalChange("1h")}
             className={cn(
               "px-2.5 py-1 text-xs transition-colors",
               interval === "1h"

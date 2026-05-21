@@ -101,6 +101,45 @@ async def test_hourly_clips_to_60_days(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_daily_with_tz_aware_us_eastern_index(tmp_path):
+    """yfinance returns daily US equity data with tz='America/New_York'.
+    Our fetch_prices must produce ISO date strings in the bar's wall-clock
+    timezone (i.e., the trading date), not UTC-converted."""
+    # Build a daily DataFrame with US/Eastern timezone-aware index.
+    # 2024-05-10 midnight US/Eastern = 2024-05-10T04:00:00Z (UTC).
+    # We MUST emit "2024-05-10" (the trading date in market timezone),
+    # NOT "2024-05-10" coincidentally because both happen to fall on the
+    # same calendar date in this case — pick a date where US/Eastern and
+    # UTC disagree by date when displayed via .strftime.
+    df = pd.DataFrame(
+        {
+            "Open":   [100.0, 101.0],
+            "High":   [101.0, 102.0],
+            "Low":    [ 99.0, 100.0],
+            "Close":  [100.5, 101.5],
+            "Volume": [10000, 11000],
+        },
+        index=pd.DatetimeIndex(
+            ["2024-05-10 00:00:00", "2024-05-11 00:00:00"],
+            name="Date",
+            tz="America/New_York",
+        ),
+    )
+    with patch.object(price_cache, "_fetch_yf", AsyncMock(return_value=df)):
+        bars, _ = await price_cache.fetch_prices(
+            dashboard_dir=tmp_path, user_id=uuid.uuid4(),
+            ticker="AAPL", start="2024-05-10", end="2024-05-11",
+            interval="1d",
+        )
+    # Expect the trade_date to be the LOCAL trading date, not the UTC
+    # date the timestamp would convert to. 2024-05-10 midnight in New York
+    # is 2024-05-10T04:00:00Z; pandas strftime on the tz-aware ts produces
+    # "2024-05-10" in the timestamp's own tz.
+    assert bars[0]["trade_date"] == "2024-05-10"
+    assert bars[1]["trade_date"] == "2024-05-11"
+
+
+@pytest.mark.asyncio
 async def test_cache_key_includes_interval(tmp_path):
     """Daily and hourly for the same ticker+range hit different cache files."""
     user_id = uuid.uuid4()
