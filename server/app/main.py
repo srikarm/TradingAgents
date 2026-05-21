@@ -3,11 +3,13 @@ from fastapi import FastAPI
 from app.routers import me as me_router
 from app.routers import portfolio as portfolio_router
 from app.routers import runs as runs_router
+from app.routers import watchlist as watchlist_router
 
 app = FastAPI(title="TradingAgents Dashboard API")
 app.include_router(me_router.router)
 app.include_router(runs_router.router)
 app.include_router(portfolio_router.router)
+app.include_router(watchlist_router.router)
 
 
 @app.get("/healthz")

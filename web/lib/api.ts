@@ -9,6 +9,7 @@ import type {
   RunTailOut,
   TickerDetailOut,
   UserOut,
+  WatchlistItemOut,
 } from "@/lib/types";
 
 const API_BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
@@ -76,6 +77,35 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: await bearer(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const respBody = await parseBody(res);
+    throw new ApiError(res.status, respBody, `api ${path} failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function del(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: { Authorization: await bearer() },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const respBody = await parseBody(res);
+    throw new ApiError(res.status, respBody, `api ${path} failed: ${res.status}`);
+  }
+}
+
 export const api = {
   me: () => get<UserOut>("/me"),
   listRuns: (ticker?: string) =>
@@ -86,6 +116,13 @@ export const api = {
     get<RunTailOut>(`/runs/${id}/tail?since=${since}`),
   countActiveRuns: () =>
     get<{ count: number }>("/runs/active/count").then((d) => d.count),
+  listWatchlist: () => get<WatchlistItemOut[]>("/watchlist"),
+  addToWatchlist: (ticker: string, notes?: string | null) =>
+    post<WatchlistItemOut>("/watchlist", { ticker, notes: notes ?? null }),
+  updateWatchlistNotes: (ticker: string, notes: string | null) =>
+    patch<WatchlistItemOut>(`/watchlist/${encodeURIComponent(ticker)}`, { notes }),
+  removeFromWatchlist: (ticker: string) =>
+    del(`/watchlist/${encodeURIComponent(ticker)}`),
   portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
   portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),
   portfolioTicker: (ticker: string, interval?: "1d" | "1h") => {
