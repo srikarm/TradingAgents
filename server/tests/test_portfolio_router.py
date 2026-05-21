@@ -161,11 +161,16 @@ async def test_ticker_detail_returns_decisions_and_prices(
                rating="Sell", raw=0.01)
     await db_session.flush()
 
-    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end):
-        return [
-            {"trade_date": "2024-05-10", "close": 100.0},
-            {"trade_date": "2024-05-15", "close": 102.0},
-        ]
+    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end, interval="1d"):
+        return (
+            [
+                {"trade_date": "2024-05-10", "open": 99.0, "high": 101.0, "low": 98.0,
+                 "close": 100.0, "volume": 1000},
+                {"trade_date": "2024-05-15", "open": 101.0, "high": 103.0, "low": 100.0,
+                 "close": 102.0, "volume": 1100},
+            ],
+            False,
+        )
 
     monkeypatch.setattr(portfolio_router, "_fetch_prices", fake_fetch)
 
@@ -318,8 +323,12 @@ async def test_ticker_detail_renders_pending_entry(
     )
     await db_session.flush()
 
-    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end):
-        return [{"trade_date": "2024-05-10", "close": 100.0}]
+    async def fake_fetch(dashboard_dir, *, user_id, ticker, start, end, interval="1d"):
+        return (
+            [{"trade_date": "2024-05-10", "open": 99.0, "high": 101.0, "low": 98.0,
+              "close": 100.0, "volume": 1000}],
+            False,
+        )
     monkeypatch.setattr(portfolio_router, "_fetch_prices", fake_fetch)
 
     async with client as c:

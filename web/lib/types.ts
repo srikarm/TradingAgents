@@ -74,6 +74,6 @@ export type MemoryEntryStatus = components["schemas"]["MemoryEntryStatus"];
 export type PortfolioSummaryOut = components["schemas"]["PortfolioSummaryOut"];
 export type PnLPoint = components["schemas"]["PnLPoint"];
 export type PortfolioCurveOut = components["schemas"]["PortfolioCurveOut"];
-export type PricePoint = components["schemas"]["PricePoint"];
+export type OHLCVBar = components["schemas"]["OHLCVBar"];
 export type DecisionPin = components["schemas"]["DecisionPin"];
 export type TickerDetailOut = components["schemas"]["TickerDetailOut"];

@@ -39,6 +39,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/active/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count Active Runs
+         * @description Count of runs for the current user that are still QUEUED or RUNNING.
+         *
+         *     Polled every 10s by web/components/RunsBadge.tsx to show the in-progress
+         *     count in the nav. Filtered by user_id + status enum — both indexed — so
+         *     sub-millisecond even at small-group scale.
+         */
+        get: operations["count_active_runs_runs_active_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -165,6 +189,28 @@ export interface components {
          * @enum {string}
          */
         MemoryEntryStatus: "pending" | "resolved";
+        /**
+         * OHLCVBar
+         * @description One bar of OHLCV market data.
+         *
+         *     `trade_date` is ISO date "YYYY-MM-DD" for daily (interval=1d)
+         *     or ISO datetime UTC "YYYY-MM-DDTHH:MM:SSZ" for hourly (interval=1h).
+         *     The client decodes accordingly.
+         */
+        OHLCVBar: {
+            /** Trade Date */
+            trade_date: string;
+            /** Open */
+            open: number;
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+            /** Close */
+            close: number;
+            /** Volume */
+            volume: number;
+        };
         /** PnLPoint */
         PnLPoint: {
             /** Trade Date */
@@ -189,13 +235,6 @@ export interface components {
             max_drawdown: number;
             /** Cumulative Pnl */
             cumulative_pnl: number;
-        };
-        /** PricePoint */
-        PricePoint: {
-            /** Trade Date */
-            trade_date: string;
-            /** Close */
-            close: number;
         };
         /** ReportSections */
         ReportSections: {
@@ -308,9 +347,14 @@ export interface components {
             /** Ticker */
             ticker: string;
             /** Prices */
-            prices: components["schemas"]["PricePoint"][];
+            prices: components["schemas"]["OHLCVBar"][];
             /** Decisions */
             decisions: components["schemas"]["DecisionPin"][];
+            /**
+             * Data Range Clipped
+             * @default false
+             */
+            data_range_clipped: boolean;
         };
         /** UserOut */
         UserOut: {
@@ -439,6 +483,39 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    count_active_runs_runs_active_count_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
                     };
                 };
             };
@@ -585,7 +662,9 @@ export interface operations {
     };
     get_ticker_detail_portfolio_ticker__ticker__get: {
         parameters: {
-            query?: never;
+            query?: {
+                interval?: "1d" | "1h";
+            };
             header?: {
                 authorization?: string | null;
             };

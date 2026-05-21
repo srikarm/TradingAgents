@@ -12,20 +12,20 @@ import json
 import logging
 import time
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
-
-import pandas as pd
+from typing import Any, Literal
 
 from app.config import get_settings
 from app.services.user_root import (
     DATE_RE,
     TICKER_RE,
     check_segment,
-    user_results_dir,
 )
 
 logger = logging.getLogger(__name__)
+
+Interval = Literal["1d", "1h"]
 
 
 class PriceFetchError(RuntimeError):
@@ -36,36 +36,23 @@ def _ttl_seconds() -> int:
     return get_settings().price_cache_ttl_seconds
 
 
-def _cache_path(
-    dashboard_dir: Path, user_id: uuid.UUID, ticker: str, start: str, end: str
-) -> Path:
-    base = user_results_dir(dashboard_dir, str(user_id)) / "cache" / "prices"
-    base.mkdir(parents=True, exist_ok=True)
-    return base / f"{ticker}_{start}_{end}.json"
+# Module-level shim around the yfinance call so tests can patch it.
+# Keep the import + actual yfinance call internal to this function;
+# callers patch `_fetch_yf` rather than monkeypatching yfinance.
+async def _fetch_yf(ticker: str, *, start: str, end: str, interval: str):
+    """Returns a pandas DataFrame with columns: Open, High, Low, Close, Volume.
+    Index is DatetimeIndex (tz-aware UTC for hourly, naive date for daily)."""
+    import asyncio
 
-
-def _yf_history(symbol: str, start: str, end: str) -> "pd.DataFrame":
-    """Indirection so tests can monkeypatch the real yfinance call."""
     import yfinance as yf
 
-    ticker = yf.Ticker(symbol.upper())
-    return ticker.history(start=start, end=end)
-
-
-def _df_to_points(df: pd.DataFrame) -> list[dict[str, Any]]:
-    if df is None or df.empty or "Close" not in df.columns:
-        return []
-    points: list[dict[str, Any]] = []
-    # pd.Timestamp.strftime works on naive and tz-aware stamps alike, formatting
-    # in the stamp's own timezone — exactly what we want for daily bars where
-    # the trading date is the wall-clock date, not UTC.
-    for ts, close in df["Close"].items():
-        date_str = pd.Timestamp(ts).strftime("%Y-%m-%d")
-        try:
-            points.append({"trade_date": date_str, "close": round(float(close), 4)})
-        except (TypeError, ValueError):
-            continue
-    return points
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: yf.Ticker(ticker).history(
+            start=start, end=end, interval=interval, auto_adjust=False
+        ),
+    )
 
 
 async def fetch_prices(
@@ -75,37 +62,70 @@ async def fetch_prices(
     ticker: str,
     start: str,
     end: str,
-) -> list[dict[str, Any]]:
-    """Return [{trade_date, close}, ...] for `ticker` from `start` to `end`.
+    interval: Interval = "1d",
+) -> tuple[list[dict[str, Any]], bool]:
+    """Return (bars, data_range_clipped) for `ticker` from `start` to `end`.
 
-    Caches results to disk under the per-user namespace for `_ttl_seconds()`.
-    Raises `PriceFetchError` on yfinance failure. Raises `ValueError` on
-    obviously invalid ticker/date inputs (defense-in-depth; route should
-    already have validated).
+    For interval='1h', the start is clipped to max 60 days before `end`
+    (yfinance free-tier hourly limit) and the second tuple element is
+    True if any clipping happened.
+
+    bars are dicts with keys: trade_date (str), open, high, low, close (float),
+    volume (int). trade_date is ISO date for daily, ISO datetime UTC for hourly.
     """
     check_segment("ticker", ticker, TICKER_RE)
     check_segment("start", start, DATE_RE)
     check_segment("end", end, DATE_RE)
 
-    path = _cache_path(dashboard_dir, user_id, ticker, start, end)
-    if path.is_file():
-        age = time.time() - path.stat().st_mtime
-        if age < _ttl_seconds():
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                pass  # fall through to refetch
+    # Hourly window clipping.
+    clipped = False
+    effective_start = start
+    if interval == "1h":
+        end_dt = datetime.strptime(end, "%Y-%m-%d")
+        start_dt = datetime.strptime(start, "%Y-%m-%d")
+        sixty_days_before_end = end_dt - timedelta(days=60)
+        if start_dt < sixty_days_before_end:
+            effective_start = sixty_days_before_end.strftime("%Y-%m-%d")
+            clipped = True
+
+    # Cache key now includes interval so daily + hourly cache separately.
+    cache_dir = dashboard_dir / str(user_id) / "price-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"{ticker}-{effective_start}-{end}-{interval}.json"
+
+    if cache_file.exists() and (time.time() - cache_file.stat().st_mtime) < _ttl_seconds():
+        with cache_file.open() as f:
+            return json.load(f), clipped
 
     try:
-        df = _yf_history(ticker.upper(), start, end)
+        df = await _fetch_yf(ticker, start=effective_start, end=end, interval=interval)
     except Exception as exc:  # noqa: BLE001
         raise PriceFetchError(str(exc)) from exc
 
-    points = _df_to_points(df)
-    try:
-        path.write_text(json.dumps(points), encoding="utf-8")
-    except OSError:
-        # Non-fatal: caller still gets the freshly-fetched data, but operators
-        # need to know the cache directory is broken (disk full, perms, NFS).
-        logger.warning("price_cache: failed to write cache %s", path, exc_info=True)
-    return points
+    if df is None or df.empty:
+        raise PriceFetchError(f"yfinance returned empty data for {ticker}")
+
+    bars: list[dict[str, Any]] = []
+    for ts, row in df.iterrows():
+        if interval == "1d":
+            trade_date = ts.strftime("%Y-%m-%d")
+        else:
+            # Hourly: emit ISO datetime UTC with Z suffix.
+            # yfinance hourly index is tz-aware; convert to UTC then format.
+            if ts.tz is None:
+                ts_utc = ts.tz_localize("UTC")
+            else:
+                ts_utc = ts.tz_convert("UTC")
+            trade_date = ts_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        bars.append({
+            "trade_date": trade_date,
+            "open": float(row["Open"]),
+            "high": float(row["High"]),
+            "low": float(row["Low"]),
+            "close": float(row["Close"]),
+            "volume": int(row["Volume"]),
+        })
+
+    with cache_file.open("w") as f:
+        json.dump(bars, f)
+    return bars, clipped

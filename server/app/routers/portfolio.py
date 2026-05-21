@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi import Path as PathParam
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -17,10 +19,10 @@ from app.models.memory_entry import MemoryEntry
 from app.models.user import User
 from app.schemas.portfolio import (
     DecisionPin,
+    OHLCVBar,
     PnLPoint,
     PortfolioCurveOut,
     PortfolioSummaryOut,
-    PricePoint,
     TickerDetailOut,
 )
 from app.services import memory_mirror, portfolio_calc, price_cache
@@ -115,6 +117,7 @@ async def get_curve(
 @router.get("/ticker/{ticker}", response_model=TickerDetailOut)
 async def get_ticker_detail(
     ticker: str = PathParam(..., pattern=r"^[A-Z][A-Z0-9.\-]{0,11}$"),
+    interval: Literal["1d", "1h"] = Query("1d"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TickerDetailOut:
@@ -167,12 +170,13 @@ async def get_ticker_detail(
         ) from None
 
     try:
-        price_points = await _fetch_prices(
+        price_points, data_range_clipped = await _fetch_prices(
             settings.dashboard_data_dir,
             user_id=user.id,
             ticker=ticker,
             start=start,
             end=end,
+            interval=interval,
         )
     except price_cache.PriceFetchError:
         # Spec §6: UI shows decision list without price overlay when yfinance
@@ -184,9 +188,11 @@ async def get_ticker_detail(
             user.id, ticker, exc_info=True,
         )
         price_points = []
+        data_range_clipped = False
 
     return TickerDetailOut(
         ticker=ticker,
-        prices=[PricePoint(**p) for p in price_points],
+        prices=[OHLCVBar(**p) for p in price_points],
         decisions=decisions,
+        data_range_clipped=data_range_clipped,
     )

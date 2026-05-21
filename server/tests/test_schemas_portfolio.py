@@ -5,10 +5,10 @@ from app.models.memory_entry import MemoryEntryStatus
 from app.schemas.portfolio import (
     DecisionPin,
     MemoryEntryOut,
+    OHLCVBar,
     PnLPoint,
     PortfolioCurveOut,
     PortfolioSummaryOut,
-    PricePoint,
     TickerDetailOut,
 )
 
@@ -62,7 +62,10 @@ def test_portfolio_curve_shape():
 def test_ticker_detail_shape():
     d = TickerDetailOut(
         ticker="NVDA",
-        prices=[PricePoint(trade_date="2024-05-10", close=950.12)],
+        prices=[OHLCVBar(
+            trade_date="2024-05-10",
+            open=940.0, high=960.0, low=935.0, close=950.12, volume=1000000,
+        )],
         decisions=[
             DecisionPin(
                 trade_date="2024-05-10",
@@ -74,7 +77,9 @@ def test_ticker_detail_shape():
     )
     assert d.ticker == "NVDA"
     assert d.prices[0].close == pytest.approx(950.12)
+    assert d.prices[0].open == pytest.approx(940.0)
     assert d.decisions[0].rating == "Buy"
+    assert d.data_range_clipped is False
 
 
 def test_decision_pin_rejects_pending_with_raw_return():
