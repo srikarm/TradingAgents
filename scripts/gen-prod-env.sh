@@ -21,9 +21,11 @@ NEXTAUTH_URL=https://tradix.axiara.ai
 # with UntrustedHost in the logs. See https://authjs.dev/getting-started/deployment
 AUTH_TRUST_HOST=true
 
-# GitHub OAuth (paste from the OAuth app's settings page)
+# OAuth providers (paste from each provider's settings page)
 AUTH_GITHUB_ID=PASTE_FROM_GITHUB_OAUTH_APP
 AUTH_GITHUB_SECRET=PASTE_FROM_GITHUB_OAUTH_APP
+AUTH_GOOGLE_ID=PASTE_FROM_GOOGLE_CLOUD_OAUTH_CLIENT
+AUTH_GOOGLE_SECRET=PASTE_FROM_GOOGLE_CLOUD_OAUTH_CLIENT
 
 # Postgres — POSTGRES_PASSWORD only honored on first DB init (empty volume).
 # If the dbdata volume already exists with a different password, you must
