@@ -50,9 +50,9 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     async jwt({ token, account, profile, user }) {
       if (account?.provider === "google" && profile) {
-        const p = profile as { sub: string; email: string };
+        const p = profile as { sub: string; email?: string };
         token.sub = String(p.sub);
-        token.email = p.email;
+        if (p.email) token.email = p.email;
         (token as { provider?: string }).provider = "google";
       } else if (account?.provider === "github" && profile) {
         const p = profile as { id: number | string; email?: string };
