@@ -88,6 +88,10 @@ export const api = {
     get<{ count: number }>("/runs/active/count").then((d) => d.count),
   portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
   portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),
-  portfolioTicker: (ticker: string) =>
-    get<TickerDetailOut>(`/portfolio/ticker/${encodeURIComponent(ticker)}`),
+  portfolioTicker: (ticker: string, interval?: "1d" | "1h") => {
+    const path = `/portfolio/ticker/${encodeURIComponent(ticker)}`;
+    return get<TickerDetailOut>(
+      interval && interval !== "1d" ? `${path}?interval=${interval}` : path,
+    );
+  },
 };
