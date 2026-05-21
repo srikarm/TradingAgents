@@ -58,9 +58,19 @@ class PortfolioCurveOut(BaseModel):
     points: list[PnLPoint]
 
 
-class PricePoint(BaseModel):
+class OHLCVBar(BaseModel):
+    """One bar of OHLCV market data.
+
+    `trade_date` is ISO date "YYYY-MM-DD" for daily (interval=1d)
+    or ISO datetime UTC "YYYY-MM-DDTHH:MM:SSZ" for hourly (interval=1h).
+    The client decodes accordingly.
+    """
     trade_date: str
+    open: float
+    high: float
+    low: float
     close: float
+    volume: int
 
 
 class DecisionPin(BaseModel):
@@ -90,5 +100,6 @@ class DecisionPin(BaseModel):
 
 class TickerDetailOut(BaseModel):
     ticker: str
-    prices: list[PricePoint]
+    prices: list[OHLCVBar]
     decisions: list[DecisionPin]
+    data_range_clipped: bool = False  # True when hourly request was clipped to 60 days

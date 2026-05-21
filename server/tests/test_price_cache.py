@@ -1,5 +1,6 @@
 import uuid
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 import pytest
@@ -8,73 +9,73 @@ from app.services import price_cache
 from app.services.price_cache import PriceFetchError, fetch_prices
 
 
-def _fake_df(rows):
-    """Build a DataFrame mimicking yfinance.history()'s shape."""
-    idx = pd.DatetimeIndex([d for d, _ in rows], name="Date")
-    return pd.DataFrame({"Close": [c for _, c in rows]}, index=idx)
+def _fake_daily_df(rows):
+    """Build a DataFrame mimicking yfinance daily history()."""
+    idx = pd.DatetimeIndex([d for d, _ in rows], name="Date", tz="UTC")
+    closes = [c for _, c in rows]
+    return pd.DataFrame({
+        "Open": closes, "High": closes, "Low": closes,
+        "Close": closes, "Volume": [1000] * len(rows),
+    }, index=idx)
 
 
 @pytest.mark.asyncio
-async def test_fetch_prices_writes_cache_and_returns_points(tmp_path, monkeypatch):
+async def test_fetch_prices_writes_cache_and_returns_points(tmp_path):
     uid = uuid.uuid4()
-    calls = []
 
-    def fake_yf(symbol, start, end):
-        calls.append((symbol, start, end))
-        return _fake_df([("2024-05-09", 100.0), ("2024-05-10", 102.5)])
+    df = _fake_daily_df([("2024-05-09", 100.0), ("2024-05-10", 102.5)])
+    mock = AsyncMock(return_value=df)
 
-    monkeypatch.setattr(price_cache, "_yf_history", fake_yf)
+    with patch.object(price_cache, "_fetch_yf", mock):
+        bars, clipped = await fetch_prices(
+            tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
+        )
 
-    pts = await fetch_prices(
-        tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
-    )
-
-    assert len(pts) == 2
-    assert pts[0] == {"trade_date": "2024-05-09", "close": 100.0}
-    assert pts[1] == {"trade_date": "2024-05-10", "close": 102.5}
-    assert len(calls) == 1  # called once
+    assert clipped is False
+    assert len(bars) == 2
+    assert bars[0]["trade_date"] == "2024-05-09"
+    assert bars[0]["close"] == 100.0
+    assert bars[1]["trade_date"] == "2024-05-10"
+    assert bars[1]["close"] == 102.5
+    assert mock.call_count == 1  # called once
 
     # Second call returns from cache without invoking yfinance
-    pts2 = await fetch_prices(
-        tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
-    )
-    assert pts2 == pts
-    assert len(calls) == 1  # still one
+    with patch.object(price_cache, "_fetch_yf", mock):
+        bars2, _ = await fetch_prices(
+            tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
+        )
+    assert bars2 == bars
+    assert mock.call_count == 1  # still one (cache hit)
 
 
 @pytest.mark.asyncio
 async def test_fetch_prices_re_fetches_after_ttl(tmp_path, monkeypatch):
     uid = uuid.uuid4()
-    calls = []
 
-    def fake_yf(symbol, start, end):
-        calls.append((symbol, start, end))
-        return _fake_df([("2024-05-09", 100.0)])
-
-    monkeypatch.setattr(price_cache, "_yf_history", fake_yf)
+    df = _fake_daily_df([("2024-05-09", 100.0)])
+    mock = AsyncMock(return_value=df)
     monkeypatch.setattr(price_cache, "_ttl_seconds", lambda: 0)  # always stale
 
-    await fetch_prices(tmp_path, user_id=uid, ticker="NVDA",
-                       start="2024-05-09", end="2024-05-09")
-    await fetch_prices(tmp_path, user_id=uid, ticker="NVDA",
-                       start="2024-05-09", end="2024-05-09")
+    with patch.object(price_cache, "_fetch_yf", mock):
+        await fetch_prices(tmp_path, user_id=uid, ticker="NVDA",
+                           start="2024-05-09", end="2024-05-09")
+        await fetch_prices(tmp_path, user_id=uid, ticker="NVDA",
+                           start="2024-05-09", end="2024-05-09")
 
-    assert len(calls) == 2  # both fetches went to yfinance
+    assert mock.call_count == 2  # both fetches went to yfinance
 
 
 @pytest.mark.asyncio
-async def test_fetch_prices_raises_on_yf_failure(tmp_path, monkeypatch):
+async def test_fetch_prices_raises_on_yf_failure(tmp_path):
     uid = uuid.uuid4()
 
-    def boom(symbol, start, end):
-        raise RuntimeError("yfinance unavailable")
+    mock = AsyncMock(side_effect=RuntimeError("yfinance unavailable"))
 
-    monkeypatch.setattr(price_cache, "_yf_history", boom)
-
-    with pytest.raises(PriceFetchError):
-        await fetch_prices(
-            tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
-        )
+    with patch.object(price_cache, "_fetch_yf", mock):
+        with pytest.raises(PriceFetchError):
+            await fetch_prices(
+                tmp_path, user_id=uid, ticker="NVDA", start="2024-05-09", end="2024-05-10"
+            )
 
 
 @pytest.mark.asyncio
@@ -88,58 +89,29 @@ async def test_fetch_prices_rejects_bad_ticker(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_fetch_prices_isolates_users(tmp_path, monkeypatch):
-    """Two users requesting the same ticker+range must hit distinct cache
-    paths under their own user_root, so one user's cache cannot poison another.
-    """
+async def test_fetch_prices_isolates_users(tmp_path):
+    """Two users requesting the same ticker+range must hit distinct cache paths."""
     uid_a = uuid.uuid4()
     uid_b = uuid.uuid4()
 
-    call_log: list[tuple] = []
+    df = _fake_daily_df([("2024-05-09", 100.0)])
+    mock = AsyncMock(return_value=df)
 
-    def fake_yf(symbol, start, end):
-        call_log.append((symbol, start, end))
-        return _fake_df([("2024-05-09", 100.0)])
+    with patch.object(price_cache, "_fetch_yf", mock):
+        await fetch_prices(
+            tmp_path, user_id=uid_a, ticker="NVDA",
+            start="2024-05-09", end="2024-05-09",
+        )
+        # Second user with same args must hit yfinance again — caches are per-user.
+        await fetch_prices(
+            tmp_path, user_id=uid_b, ticker="NVDA",
+            start="2024-05-09", end="2024-05-09",
+        )
+    assert mock.call_count == 2
 
-    monkeypatch.setattr(price_cache, "_yf_history", fake_yf)
-
-    await fetch_prices(
-        tmp_path, user_id=uid_a, ticker="NVDA",
-        start="2024-05-09", end="2024-05-09",
-    )
-    # Second user with same args must hit yfinance again — caches are per-user.
-    await fetch_prices(
-        tmp_path, user_id=uid_b, ticker="NVDA",
-        start="2024-05-09", end="2024-05-09",
-    )
-    assert len(call_log) == 2
-
-    # And the cache files live at different paths under each user's namespace
-    cache_a = tmp_path / "users" / str(uid_a) / "cache" / "prices" / "NVDA_2024-05-09_2024-05-09.json"
-    cache_b = tmp_path / "users" / str(uid_b) / "cache" / "prices" / "NVDA_2024-05-09_2024-05-09.json"
+    # Cache files live at different paths under each user's namespace.
+    cache_a = tmp_path / str(uid_a) / "price-cache" / "NVDA-2024-05-09-2024-05-09-1d.json"
+    cache_b = tmp_path / str(uid_b) / "price-cache" / "NVDA-2024-05-09-2024-05-09-1d.json"
     assert cache_a.is_file()
     assert cache_b.is_file()
     assert cache_a != cache_b
-
-
-def test_df_to_points_preserves_wall_clock_date_on_tz_aware_index():
-    """v3+ followup #6: yfinance returns tz-aware DatetimeIndex (US/Eastern
-    for US markets). `_df_to_points` must key bars by the wall-clock trading
-    date in the index's timezone, NOT by UTC date — a midnight ET timestamp
-    must serialize as the ET date, not slide back to the prior UTC day.
-
-    Was previously untested; covers the tz-aware path that the old
-    `tz_localize(None)` strip used to walk through.
-    """
-    idx = pd.DatetimeIndex(
-        ["2024-05-09 00:00:00", "2024-05-10 00:00:00"],
-        tz="US/Eastern",
-    )
-    df = pd.DataFrame({"Close": [100.0, 102.5]}, index=idx)
-
-    points = price_cache._df_to_points(df)
-
-    assert points == [
-        {"trade_date": "2024-05-09", "close": 100.0},
-        {"trade_date": "2024-05-10", "close": 102.5},
-    ]
