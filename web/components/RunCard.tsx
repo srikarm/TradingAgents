@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import type { RunOut } from "@/lib/types";
 import RatingBadge from "./RatingBadge";
 import StatusBadge from "./StatusBadge";
@@ -44,6 +44,15 @@ export default function RunCard({
             <span className="font-mono text-[11px] text-fg-subtle tabular-nums">
               {run.trade_date}
             </span>
+            {run.triggered_by === "monitor" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide text-brand"
+                title="Auto-dispatched by the daily Monitor"
+              >
+                <Sparkles className="h-2.5 w-2.5" aria-hidden />
+                Monitor
+              </span>
+            )}
           </div>
           <div className="mt-1 text-[11px] text-fg-subtle tabular-nums">
             {formatRelative(run.created_at)}

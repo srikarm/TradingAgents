@@ -10,6 +10,7 @@ export interface RunOut {
   final_rating: string | null;
   created_at: string;
   completed_at: string | null;
+  triggered_by: string;
 }
 
 export interface RunListOut {
