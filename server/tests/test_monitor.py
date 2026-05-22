@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.config import get_settings
 from app.db import get_db
 from app.main import app
+from app.models.base import Base
 from app.models.user import User
 from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem
@@ -302,31 +303,127 @@ async def test_dispatch_user_watchlist_trade_date_in_user_tz(db_session, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_dispatch_persists_across_sessions(async_client_authed, authed_user, db_session):
-    """Monitor-dispatched run survives session close (guards against missing-commit regressions)."""
-    # This test mirrors the pattern from Wave 5.1 — open a fresh session after the dispatch
-    # and confirm the row exists. It's the same anti-pattern guard as test_add_persists_across_sessions
-    # in test_watchlist.py.
-    # (Implementation detail: use async_sessionmaker(db_session.bind) to open a fresh session.)
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-    db_session.add(WatchlistItem(id=uuid.uuid4(), user_id=authed_user.id, ticker="PERSIST"))
-    authed_user.monitor_enabled = True
-    authed_user.briefing_time_local = "07:00"
-    authed_user.briefing_tz = "Asia/Jakarta"
+async def test_dispatch_persists_across_sessions(tmp_path):
+    """Monitor-dispatched run survives session close (guards against missing-commit regressions).
+
+    Uses a FILE-BACKED SQLite with two physically distinct engines — the dispatch
+    session and the assertion session each get their own connection. SQLite's
+    cross-connection visibility only includes COMMITTED data, so a missing
+    `await session.commit()` in dispatch_run would leave the row invisible to
+    the assertion connection, and this test would correctly fail.
+
+    Why not :memory:? aiosqlite's in-memory mode shares page cache across
+    sessions on the same engine, so flushed-but-uncommitted rows leak across
+    sessions. That made the earlier version of this test a no-op gate
+    (empirically verified by replacing dispatch_run's commit with flush —
+    the test passed anyway). The file-backed approach with two engines is
+    the cheapest way to get genuine commit-or-die semantics.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    db_path = tmp_path / "persist-gate.db"
+    db_url = f"sqlite+aiosqlite:///{db_path}"
+
+    # Engine A: used by the dispatch call.
+    engine_a = create_async_engine(db_url)
+    async with engine_a.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory_a = async_sessionmaker(engine_a, expire_on_commit=False)
+
+    user = User(
+        id=uuid.uuid4(),
+        github_id="u-persist-gate",
+        monitor_enabled=True,
+        briefing_time_local="07:00",
+        briefing_tz="Asia/Jakarta",
+    )
+
+    async with factory_a() as session_a:
+        session_a.add(user)
+        session_a.add(WatchlistItem(id=uuid.uuid4(), user_id=user.id, ticker="PERSIST"))
+        await session_a.commit()  # seed users + watchlist (independent of the gate)
+
+        mock_pool = AsyncMock()
+        mock_pool.enqueue_job = AsyncMock(return_value=None)
+
+        await dispatch_user_watchlist(
+            session_a, mock_pool, user,
+            datetime(2026, 5, 22, 0, 0, 0, tzinfo=timezone.utc),
+        )
+    await engine_a.dispose()  # close A entirely — no shared connection state
+
+    # Engine B: independent connection. Only committed rows are visible here.
+    engine_b = create_async_engine(db_url)
+    factory_b = async_sessionmaker(engine_b, expire_on_commit=False)
+    try:
+        async with factory_b() as session_b:
+            row = (await session_b.execute(
+                select(Run).where(Run.user_id == user.id, Run.ticker == "PERSIST")
+            )).scalar_one_or_none()
+            assert row is not None, "dispatch_run must commit — fresh connection sees no row"
+            assert row.triggered_by == "monitor"
+    finally:
+        await engine_b.dispose()
+
+
+@pytest.mark.asyncio
+async def test_monitor_tick_isolates_per_user_failures(db_session, monkeypatch):
+    """I3 — One user raising before per-ticker loop must not block other users in the tick."""
+    from app.services import monitor as monitor_mod
+
+    bad = _make_user("u-bad", enabled=True, time_local="07:00", tz="Asia/Jakarta")
+    good = _make_user("u-good", enabled=True, time_local="07:00", tz="Asia/Jakarta")
+    db_session.add_all([bad, good])
+    db_session.add(WatchlistItem(id=uuid.uuid4(), user_id=good.id, ticker="OK"))
     await db_session.commit()
+
+    # Stub the session factory + pool used inside monitor_tick. The session
+    # factory must yield db_session so the seeded rows are visible.
+    class _NoOpAsyncCM:
+        async def __aenter__(self):
+            return db_session
+        async def __aexit__(self, *exc):
+            return False
+
+    def _factory():
+        return _NoOpAsyncCM()
 
     mock_pool = AsyncMock()
     mock_pool.enqueue_job = AsyncMock(return_value=None)
+    mock_pool.close = AsyncMock(return_value=None)
 
-    await dispatch_user_watchlist(
-        db_session, mock_pool, authed_user,
-        datetime(2026, 5, 22, 0, 0, 0, tzinfo=timezone.utc),
-    )
+    # Replace dispatch_user_watchlist to raise for `bad` but succeed for `good`.
+    real_dispatch = monitor_mod.dispatch_user_watchlist
+    calls: list = []
 
-    fresh_factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
-    async with fresh_factory() as fresh:
-        row = (await fresh.execute(
-            select(Run).where(Run.user_id == authed_user.id, Run.ticker == "PERSIST")
-        )).scalar_one_or_none()
-        assert row is not None, "dispatch should persist across sessions"
-        assert row.triggered_by == "monitor"
+    async def fake_dispatch(db, pool, user, now_utc):
+        calls.append(user.id)
+        if user.id == bad.id:
+            raise RuntimeError("transient DB blip before per-ticker loop")
+        return await real_dispatch(db, pool, user, now_utc)
+
+    monkeypatch.setattr(monitor_mod, "dispatch_user_watchlist", fake_dispatch)
+    # Patch the names monitor.py imported at module top (M6 — no more
+    # function-scoped imports), not the source modules.
+    monkeypatch.setattr(monitor_mod, "get_session_factory", lambda: _factory)
+
+    async def _fake_pool():
+        return mock_pool
+    monkeypatch.setattr(monitor_mod, "get_redis_pool", _fake_pool)
+
+    # Pin "now" to the Jakarta briefing window so both users are due.
+    class _FixedDT:
+        @staticmethod
+        def now(tz):
+            return datetime(2026, 5, 22, 0, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(monitor_mod, "datetime", _FixedDT)
+
+    result = await monitor_mod.monitor_tick({})
+
+    # Both users were attempted; `good` succeeded despite `bad` raising.
+    assert bad.id in calls
+    assert good.id in calls
+    # Only the successful user is in results.
+    assert result["users_dispatched"] == 1
+    assert result["details"][0]["user_id"] == str(good.id)

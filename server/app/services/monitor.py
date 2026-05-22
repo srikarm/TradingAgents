@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.db import get_session_factory
 from app.models.user import User
 from app.models.watchlist import WatchlistItem
 from app.schemas.run import RunCreate
+from app.services.redis_pool import get_redis_pool
 from app.services.run_dispatcher import DuplicateRunningError, dispatch_run
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,15 @@ async def find_due_users(
         try:
             tz = ZoneInfo(u.briefing_tz)
         except Exception:
+            # Pydantic validates briefing_tz at the API layer against
+            # zoneinfo.available_timezones(), so an invalid value here
+            # implies DB drift, a downgrade-then-upgrade with bad rows,
+            # or a hand-rolled SQL fix. Log so it's debuggable instead
+            # of a silent monitor outage.
+            logger.warning(
+                "monitor: skipping user=%s due to invalid briefing_tz=%r",
+                u.id, u.briefing_tz,
+            )
             continue
         local_now = now_utc.astimezone(tz)
         local_window_start = (now_utc - window).astimezone(tz)
@@ -46,6 +57,10 @@ async def find_due_users(
                 hour=hh, minute=mm, second=0, microsecond=0
             )
         except (ValueError, AttributeError):
+            logger.warning(
+                "monitor: skipping user=%s due to malformed briefing_time_local=%r",
+                u.id, u.briefing_time_local,
+            )
             continue
         if local_window_start < briefing_today <= local_now:
             due.append(u)
@@ -92,17 +107,31 @@ async def dispatch_user_watchlist(
 
 
 def compute_next_briefing_at(user: User, now_utc: datetime) -> datetime | None:
-    """Returns the next UTC instant the user's briefing will fire, or None if disabled."""
+    """Returns the next UTC instant the user's briefing will fire, or None if disabled.
+
+    Returning None for `monitor_enabled=False` or missing time/tz is a valid
+    "not configured yet" state and does NOT log. Returning None because
+    ZoneInfo() raised or the time string is malformed DOES log a warning —
+    those are error states that should be debuggable.
+    """
     if not user.monitor_enabled or not user.briefing_time_local or not user.briefing_tz:
         return None
     try:
         tz = ZoneInfo(user.briefing_tz)
     except Exception:
+        logger.warning(
+            "monitor: compute_next_briefing_at skipping user=%s — invalid briefing_tz=%r",
+            user.id, user.briefing_tz,
+        )
         return None
     local_now = now_utc.astimezone(tz)
     try:
         hh, mm = map(int, user.briefing_time_local.split(":"))
     except (ValueError, AttributeError):
+        logger.warning(
+            "monitor: compute_next_briefing_at skipping user=%s — malformed briefing_time_local=%r",
+            user.id, user.briefing_time_local,
+        )
         return None
     briefing_today = local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
     if briefing_today > local_now:
@@ -116,11 +145,7 @@ async def monitor_tick(ctx: dict) -> dict:
     """Fires every 15 min. Dispatches due users' watchlists.
 
     Opens its own session + arq pool — neither is provided by the cron context.
-    Imports are function-scoped to avoid module-load cycles when the worker
-    boots (services -> db -> models).
     """
-    from app.db import get_session_factory  # avoid import cycle at module load
-    from app.services.redis_pool import get_redis_pool  # worker-friendly pool helper
     factory = get_session_factory()
     pool = await get_redis_pool()
     now_utc = datetime.now(timezone.utc)
@@ -129,8 +154,20 @@ async def monitor_tick(ctx: dict) -> dict:
         async with factory() as session:
             due = await find_due_users(session, now_utc)
             for user in due:
-                r = await dispatch_user_watchlist(session, pool, user, now_utc)
-                results.append({"user_id": str(user.id), **r})
+                # dispatch_user_watchlist catches per-ticker failures
+                # internally; this outer wrap handles failures BEFORE the
+                # per-ticker loop begins (e.g. transient DB error on the
+                # watchlist SELECT). Without it, one user's failure would
+                # silently skip every remaining user in the same tick.
+                try:
+                    r = await dispatch_user_watchlist(session, pool, user, now_utc)
+                    results.append({"user_id": str(user.id), **r})
+                except Exception:
+                    logger.exception(
+                        "monitor: dispatch failed for user=%s — continuing with next user",
+                        user.id,
+                    )
+                    continue
     finally:
         await pool.close()
     if results:

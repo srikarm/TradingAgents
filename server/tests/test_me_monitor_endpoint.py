@@ -124,3 +124,24 @@ async def test_patch_monitor_disable_preserves_config(async_client_authed):
     # Time + tz should still be there (preserved for re-enable):
     assert body["briefing_time_local"] == "07:00"
     assert body["briefing_tz"] == "Asia/Jakarta"
+
+
+@pytest.mark.asyncio
+async def test_patch_monitor_reenable_with_empty_body(async_client_authed):
+    """After enable+disable, re-enable with just {enabled: True} should succeed
+    because the user's row still has time+tz.
+
+    Locks in the looser-validation contract documented at routers/me.py:29-32
+    (fall back to DB values when body omits time+tz). The plan's verbatim
+    check would have 422'd this — see deviation note in commit c513141.
+    """
+    await async_client_authed.patch("/me/monitor", json={
+        "enabled": True, "briefing_time_local": "07:00", "briefing_tz": "Asia/Jakarta",
+    })
+    await async_client_authed.patch("/me/monitor", json={"enabled": False})
+    res = await async_client_authed.patch("/me/monitor", json={"enabled": True})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["enabled"] is True
+    assert body["briefing_time_local"] == "07:00"
+    assert body["briefing_tz"] == "Asia/Jakarta"
