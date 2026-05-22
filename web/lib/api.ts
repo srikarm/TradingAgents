@@ -1,6 +1,8 @@
 import { SignJWT } from "jose";
 import { auth } from "@/lib/auth";
 import type {
+  MonitorOut,
+  MonitorUpdate,
   PortfolioCurveOut,
   PortfolioSummaryOut,
   RunCreate,
@@ -123,6 +125,8 @@ export const api = {
     patch<WatchlistItemOut>(`/watchlist/${encodeURIComponent(ticker)}`, { notes }),
   removeFromWatchlist: (ticker: string) =>
     del(`/watchlist/${encodeURIComponent(ticker)}`),
+  updateMonitor: (body: MonitorUpdate) =>
+    patch<MonitorOut>("/me/monitor", body),
   portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
   portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),
   portfolioTicker: (ticker: string, interval?: "1d" | "1h") => {

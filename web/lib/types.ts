@@ -78,3 +78,5 @@ export type OHLCVBar = components["schemas"]["OHLCVBar"];
 export type DecisionPin = components["schemas"]["DecisionPin"];
 export type TickerDetailOut = components["schemas"]["TickerDetailOut"];
 export type WatchlistItemOut = components["schemas"]["WatchlistItemOut"];
+export type MonitorOut = components["schemas"]["MonitorOut"];
+export type MonitorUpdate = components["schemas"]["MonitorUpdate"];
