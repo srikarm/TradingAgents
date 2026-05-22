@@ -18,6 +18,8 @@ from app.config import get_settings
 from app.models import memory_entry as _memory_entry  # noqa: F401
 from app.models import run as _run  # noqa: F401
 from app.models import user as _user  # noqa: F401
+from app.models import watchlist as _watchlist  # noqa: F401  # Wave 5.2 — monitor cron reads watchlist_items
+from app.services.monitor import monitor_tick
 from app.services.redis_pool import get_redis_settings
 from app.workers.tasks import orphan_sweeper, run_propagate
 
@@ -28,7 +30,11 @@ class WorkerSettings:
         cron(
             orphan_sweeper,
             minute=set(range(0, 60, 5)),  # every 5 minutes
-        )
+        ),
+        # Wave 5.2 — Monitor cron: fires at :00, :15, :30, :45 of every hour.
+        # The 15-min window inside find_due_users matches this cadence so
+        # every enabled user gets exactly one briefing per local day.
+        cron(monitor_tick, minute={0, 15, 30, 45}),
     ]
     redis_settings = get_redis_settings()
     max_jobs = 1  # v1: one run at a time per worker process

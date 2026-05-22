@@ -40,6 +40,7 @@ async def dispatch_run(
     user_id: uuid.UUID,
     dashboard_dir: Path,
     body: RunCreate,
+    triggered_by: str = "manual",
 ) -> Run:
     ticker = body.ticker.upper()
     trade_date = body.trade_date
@@ -67,6 +68,7 @@ async def dispatch_run(
         status=RunStatus.QUEUED,
         results_path=str(target),
         created_at=datetime.now(timezone.utc),
+        triggered_by=triggered_by,
     )
     session.add(run)
     await session.commit()
