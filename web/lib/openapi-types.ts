@@ -388,6 +388,8 @@ export interface components {
             created_at: string;
             /** Completed At */
             completed_at: string | null;
+            /** Triggered By */
+            triggered_by: string;
             /** Results Path */
             results_path: string;
             /** Error Summary */
@@ -421,6 +423,8 @@ export interface components {
             created_at: string;
             /** Completed At */
             completed_at: string | null;
+            /** Triggered By */
+            triggered_by: string;
         };
         /**
          * RunTailOut

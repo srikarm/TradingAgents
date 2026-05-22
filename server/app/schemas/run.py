@@ -17,6 +17,7 @@ class RunOut(BaseModel):
     final_rating: str | None
     created_at: datetime
     completed_at: datetime | None
+    triggered_by: str  # Wave 5.2; 'manual' (default) or 'monitor'
 
     model_config = ConfigDict(from_attributes=True)
 

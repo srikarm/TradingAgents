@@ -34,9 +34,12 @@ export interface RunDetailOut extends RunOut {
 
 export interface UserOut {
   id: string;
-  github_id: string;
+  github_id: string | null;
   email: string | null;
   created_at: string;
+  monitor_enabled: boolean;
+  briefing_time_local: string | null;
+  briefing_tz: string | null;
 }
 
 export type AnalystKey = "market" | "social" | "news" | "fundamentals";
