@@ -38,3 +38,8 @@ class Run(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Wave 5.2 — Provenance of the dispatch. 'manual' = POST /runs;
+    # 'monitor' = monitor_tick cron. server_default backfills existing rows.
+    triggered_by: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="manual"
+    )

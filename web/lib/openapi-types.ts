@@ -21,6 +21,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Monitor
+         * @description Enable/disable the monitor cron + persist briefing time + tz.
+         *
+         *     Enabling requires both briefing_time_local and briefing_tz to be set
+         *     (either in this request or already on the user record). Disabling
+         *     preserves the existing time + tz so re-enabling restores prior config.
+         */
+        patch: operations["update_monitor_me_monitor_patch"];
+        trace?: never;
+    };
     "/runs": {
         parameters: {
             query?: never;
@@ -240,6 +264,26 @@ export interface components {
          * @enum {string}
          */
         MemoryEntryStatus: "pending" | "resolved";
+        /** MonitorOut */
+        MonitorOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Briefing Time Local */
+            briefing_time_local: string | null;
+            /** Briefing Tz */
+            briefing_tz: string | null;
+            /** Next Briefing At */
+            next_briefing_at: string | null;
+        };
+        /** MonitorUpdate */
+        MonitorUpdate: {
+            /** Enabled */
+            enabled: boolean;
+            /** Briefing Time Local */
+            briefing_time_local?: string | null;
+            /** Briefing Tz */
+            briefing_tz?: string | null;
+        };
         /**
          * OHLCVBar
          * @description One bar of OHLCV market data.
@@ -344,6 +388,8 @@ export interface components {
             created_at: string;
             /** Completed At */
             completed_at: string | null;
+            /** Triggered By */
+            triggered_by: string;
             /** Results Path */
             results_path: string;
             /** Error Summary */
@@ -377,6 +423,8 @@ export interface components {
             created_at: string;
             /** Completed At */
             completed_at: string | null;
+            /** Triggered By */
+            triggered_by: string;
         };
         /**
          * RunTailOut
@@ -415,7 +463,7 @@ export interface components {
              */
             id: string;
             /** Github Id */
-            github_id: string;
+            github_id: string | null;
             /** Email */
             email: string | null;
             /**
@@ -423,6 +471,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Monitor Enabled */
+            monitor_enabled: boolean;
+            /** Briefing Time Local */
+            briefing_time_local: string | null;
+            /** Briefing Tz */
+            briefing_tz: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -493,6 +547,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_monitor_me_monitor_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitorOut"];
                 };
             };
             /** @description Validation Error */

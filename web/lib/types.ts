@@ -10,6 +10,7 @@ export interface RunOut {
   final_rating: string | null;
   created_at: string;
   completed_at: string | null;
+  triggered_by: string;
 }
 
 export interface RunListOut {
@@ -34,9 +35,12 @@ export interface RunDetailOut extends RunOut {
 
 export interface UserOut {
   id: string;
-  github_id: string;
+  github_id: string | null;
   email: string | null;
   created_at: string;
+  monitor_enabled: boolean;
+  briefing_time_local: string | null;
+  briefing_tz: string | null;
 }
 
 export type AnalystKey = "market" | "social" | "news" | "fundamentals";
@@ -78,3 +82,5 @@ export type OHLCVBar = components["schemas"]["OHLCVBar"];
 export type DecisionPin = components["schemas"]["DecisionPin"];
 export type TickerDetailOut = components["schemas"]["TickerDetailOut"];
 export type WatchlistItemOut = components["schemas"]["WatchlistItemOut"];
+export type MonitorOut = components["schemas"]["MonitorOut"];
+export type MonitorUpdate = components["schemas"]["MonitorUpdate"];
