@@ -84,3 +84,5 @@ export type TickerDetailOut = components["schemas"]["TickerDetailOut"];
 export type WatchlistItemOut = components["schemas"]["WatchlistItemOut"];
 export type MonitorOut = components["schemas"]["MonitorOut"];
 export type MonitorUpdate = components["schemas"]["MonitorUpdate"];
+export type SignalOut = components["schemas"]["SignalOut"];
+export type SignalListOut = components["schemas"]["SignalListOut"];
