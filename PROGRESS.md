@@ -2,42 +2,63 @@
 
 ## Current State
 
-- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `994907e`)
+- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `d415143`)
 - **Production URL:** **https://tradix.axiara.ai** — live on GCP Compute Engine, single-VM docker-compose stack, ~$26/mo
-- **Tests:** 159 server tests passing + 21 library tests (5 prior + 16 Indonesia news tests from PR #17)
-- **PRs merged:** 19 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (PR #15) + 1 UI modernization (PR #16) + 1 Indonesia stock support (PR #17) + 1 RSS hotfix (PR #18) + 1 production deploy (PR #19)
-- **GCP deploy (PR #19 + Phase 2-4 hot-fixes):** Single `e2-medium` VM in `asia-southeast2-a`, Caddy reverse proxy + auto Let's Encrypt cert, GitHub Actions → ghcr.io → SSH-pull CI/CD, daily 03:00 ICT backups to `gs://tradix-backups/` (14-day lifecycle, restore drill validated). OpenRouter (`anthropic/claude-sonnet-4.6` + `openai/gpt-4o-mini`) as the prod LLM gateway.
-- **Indonesia (IDX) support (PRs #17 + #18):** `.JK` ticker routing → Indonesian RSS news source (Detik, Kompas, Bisnis, Investasi) + `^JKSE` benchmark mapping + Launch-form IDX hint. Hotfix #18 swapped four dead RSS URLs for live ones.
-- **Dashboard UI modernization (PR #16):** Tailwind + Axiara AI brand palette + glass design system applied across every page. Inter + JetBrains Mono fonts, Lucide icons, dark-only OLED palette.
+- **Tests:** 228 server tests passing, 1 deselected, 0 regressions. Web: vitest unit tests + Playwright e2e specs.
+- **PRs merged:** 27 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (#15) + 1 UI modernization (#16) + 2 Indonesia (#17 + #18 hotfix) + 1 production deploy (#19) + 1 PROGRESS checkpoint (#20) + 1 deploy hot-fix bake-in (#21) + 3 Wave 4 items (#22 auth UI + #23 realtime opt-in + #24 technical chart) + 3 Wave 5 sub-projects (#25 watchlists + #26 monitor + #27 signals feed).
+- **GCP deploy:** Single `e2-medium` VM in `asia-southeast2-a`, Caddy reverse proxy + Let's Encrypt, GitHub Actions → ghcr.io → SSH-pull CI/CD, daily 03:00 ICT backups to `gs://tradix-backups/` (14-day lifecycle). OpenRouter (`anthropic/claude-sonnet-4.6` + `openai/gpt-4o-mini`) as prod LLM gateway.
+- **Auth (PR #22):** Auth.js v5 (NextAuth) with GitHub + Google providers + `AUTH_TRUST_HOST=true` for VM deploys; email-as-canonical-identity with provider-id legacy fallback + auto-link by email.
+- **Wave 4 UX (PRs #22-#24):** Custom `/login` page, real-time analysis opt-in checkbox + RunsBadge in nav (active count poller), TradingView lightweight-charts v5 on `/portfolio/[ticker]` with markers + DecisionTimeline.
+- **Wave 5 agentic monitoring (PRs #25-#27):**
+  - **5.1 Watchlists** — per-user `watchlist_items` table (UNIQUE(user_id, ticker) + composite index), `/watchlist` page with QuickAddForm + WatchlistTable, native `<dialog>` modal for remove confirmation, inline notes editing.
+  - **5.2 Monitor** — arq cron at `minute={0,15,30,45}` fires `monitor_tick` which finds users whose IANA-tz briefing time falls in the 15-min window and dispatches each watchlist ticker via `dispatch_run()` with `triggered_by='monitor'`. PATCH `/me/monitor` for user config. Inline `MonitorSection` on `/watchlist`. Monitor badge on history runs.
+  - **5.3 Signals feed** — `/signals` page (Zap nav item, 6th) renders a daily briefing: actionable group (BUY/SELL/in-flight, color-coded chips) above neutral (HOLD at 60% opacity). New `GET /signals/today` endpoint joins `runs ⨝ watchlist_items.notes` (LEFT JOIN) filtered by today's user-TZ `trade_date` + `triggered_by='monitor'`. Whole-card link → `/history/[runId]`.
 
 | Metric | Value |
 |---|---|
-| Local main HEAD | `994907e` (Merge PR #19) |
-| Most recent PR | #19 — `feat(deploy): production deploy machinery for tradix.axiara.ai`, merged 2026-05-20 |
+| Local main HEAD | `d415143` (Merge PR #27) |
+| Most recent PR | #27 — `feat(signals): daily Signals feed UI — Wave 5.3`, merged 2026-05-23 |
 | Production URL | https://tradix.axiara.ai |
 | GCP VM | `tradix` (e2-medium, asia-southeast2-a, static IP `34.50.106.35`) |
 | Backup bucket | `gs://tradix-backups/` (14-day lifecycle, daily 03:00 ICT cron) |
-| Server test suite | 159 pass / 1 deselected |
-| Library test suite | 21 pass in scoped runs (5 prior + 16 new Indonesia tests); pre-existing root collection errors unrelated |
-| Working tree | only `docker-compose.yml` + `uv.lock` drift + `.DS_Store`/build artifacts untracked |
-| Active branches ahead of main | `chore/progress-md-gcp-deploy` (this PR) |
+| Server test suite | 228 pass / 1 deselected |
+| Web vitest | 3 assertions across 2 describe blocks (isActionable + filter split) |
+| Web Playwright e2e | watchlist + monitor + signals specs (3-7 active each + 1 skipped per spec) |
+| Working tree | clean (only untracked `.DS_Store`, `node_modules`, `.claude/`, build artifacts) |
+| Alembic head | `e4f5a6b7c8d9` (Wave 5.2 monitor migration) |
 
 ## What To Do Next
 
-**Dashboard fully shipped + modernized + Indonesia market support + production deploy live.** All 19 PRs merged. Active focus: open. Pick from the followup PR queue or a new feature direction.
+**Wave 5 agentic monitoring loop is functionally complete (5.1 + 5.2 + 5.3 shipped).** Users can watchlist tickers, have the Monitor auto-analyze them daily at a configurable time, and see today's signals in a triaged feed. The remaining gap is notification — users still need to actively visit `/signals` to know what changed.
 
-External / account-level note (no longer blocking demos — OpenRouter is the prod default and works):
-- **OpenAI quota** — direct OpenAI calls still 429. Prod uses OpenRouter (`anthropic/claude-sonnet-4.6` for deep-think, `openai/gpt-4o-mini` for quick-think) which has no quota issue. To use OpenAI direct again, top up the account.
+Active focus: open. Pick from the followup queue or a new direction.
 
-Possible next directions (none gated; just suggestions):
-- **✅ Cloud + VPS deployment (shipped)** — `https://tradix.axiara.ai` live on GCP. Single-VM docker-compose, Caddy + Let's Encrypt, GitHub Actions auto-deploy on push to main, daily GCS backups with 14-day retention, restore drill validated. The compose stack remains VPS-portable if you ever want to switch providers (e.g., Hetzner CX22 for ~$5/mo vs GCP e2-medium for ~$25/mo). See [`docs/deployment.md`](docs/deployment.md) and the design + plan docs in `docs/superpowers/plans/`.
-- **🛠️ GCP-deploy followup PR (pending)** — small consolidated PR to bake the Phase 2-4 hot-fixes into the repo so future deploys don't need manual VM patching. Items: bootstrap.sh perms (chown /srv/tradingagents to deploy user + chgrp docker + chmod 750/640 on /etc/tradingagents/), `scripts/gen-prod-env.sh` template (add `AUTH_TRUST_HOST=true`, swap default LLM to `claude-sonnet-4.6`), fix misleading `AUTH_TRUST_HOST` comment in dev compose override, fix multi-line ssh quoting in `.github/workflows/deploy.yml`.
-- **More international markets** — momentum from PR #17 suggests extending the same pattern to other non-US exchanges (LSE `.L`, TSE `.T`, BVMF `.SA`, etc.). Each = benchmark mapping + region-appropriate news source + Launch-form hint update.
-- **CLI / worker `_persist_reports` unification** — out-of-scope from PR #14: switch `server/app/workers/tasks.py:_persist_reports` to call the canonical `tradingagents.reports.save_report_to_disk` instead of maintaining its subset. Behavior change (worker would start writing the full 5-tier layout including risk + portfolio + consolidated report); needs a design decision.
-- **Light-mode variant** — currently dark-only per the Axiara brand guidelines. Adding light mode = define `:root[data-theme="light"]` with inverted tokens + a theme toggle.
-- **Polish `TickerPriceChart` + `DecisionTimeline`** — legacy inline styles still on the `/portfolio/[ticker]` route per PR #16 scope note.
-- **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.) — orthogonal to all current work; fixing them unblocks end-to-end library testing.
-- **Cloudflare proxy** — deferred from v1 design. Easy add later: switch the Hostinger→Cloudflare DNS record from gray-cloud (DNS-only) to orange-cloud (proxied). Caddy stays on the origin; either configure Cloudflare SSL "Full (strict)" to validate the origin's Let's Encrypt cert, or switch Caddy to DNS-01 ACME challenge.
+- **Wave 5.4 Notifications (next in the agentic-monitoring arc)** — close the freshness gap that Wave 5.3 deliberately left open. Email or push when a strong-signal run lands; respects the same per-user monitor config. Followup queue from PR #27: rating-change detection (today vs yesterday delta), inline-expand Final report on the card, include manual runs (toggle), read/unread state, SSE/realtime updates.
+- **`types.ts` refactor** — replace remaining hand-coded TS interfaces in `web/lib/types.ts` with `components["schemas"]["X"]` re-exports. The Wave 5.2 + 5.3 reviews caught three separate drift incidents (`UserOut`, `RunOut`); this refactor eliminates the class permanently.
+- **CI Node.js 20 → 24 migration** — workflow annotations warn that Node 20 actions are deprecated after Sept 2026. Bump `actions/checkout`, `docker/setup-buildx-action`, `docker/login-action`, `docker/build-push-action` to their Node 24-compatible majors.
+- **More international markets** — extend the `.JK` pattern from PR #17 to LSE `.L`, TSE `.T`, BVMF `.SA`, etc. Each = benchmark mapping + region-appropriate news source + Launch-form hint update.
+- **CLI / worker `_persist_reports` unification** — switch `server/app/workers/tasks.py:_persist_reports` to call the canonical `tradingagents.reports.save_report_to_disk` instead of maintaining its subset.
+- **Light-mode variant** — currently dark-only per Axiara brand. Adding light mode = `:root[data-theme="light"]` with inverted tokens + a theme toggle.
+- **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.); orthogonal to all current work; fixing them unblocks end-to-end library testing.
+- **Cloudflare proxy** — deferred from v1 design. Easy add later: switch DNS to orange-cloud + Caddy "Full (strict)" or DNS-01 ACME challenge.
+
+---
+
+## Checkpoint 2026-05-24 (Wave 5.1 + 5.2 + 5.3 shipped — agentic monitoring loop complete)
+
+- **Session:** Long-running session that brainstormed → designed → planned → executed three Wave 5 sub-projects, plus Wave 4 items 1/2/3 (auth UI, realtime opt-in, technical chart) had landed earlier in the same arc.
+- **Branch:** `main` at `d415143` (was `994907e` at last sync)
+- **Done:**
+  - **Wave 4 item 1 (PR #22)** — Auth.js v5 Google OAuth + custom `/login` page, email-as-canonical-identity with provider-id legacy fallback + auto-link-by-email, `AUTH_TRUST_HOST=true` for VM deploys.
+  - **Wave 4 item 2 (PR #23)** — real-time analysis opt-in checkbox on Launch form + active-runs poller (`/runs/active/count`) + RunsBadge in nav.
+  - **Wave 4 item 3 (PR #24)** — TradingView lightweight-charts v5 on `/portfolio/[ticker]` (candlestick + RSI pane + decision markers) + `DecisionTimeline` rail.
+  - **Wave 5.1 (PR #25)** — `watchlist_items` table (migration `d3e4f5a6b7c8`), `/watchlist` page (QuickAddForm + WatchlistTable with native `<dialog>` modal), 4 CRUD endpoints, 13 server tests + 7 Playwright e2e. Two-stage review (spec + quality) caught a **critical missing-commit bug** in the first commit — fix uses file-backed SQLite + two engines to make the persistence test genuinely catch missing-commit regressions.
+  - **Wave 5.2 (PR #26)** — Monitor cron (migration `e4f5a6b7c8d9` adds `users.monitor_enabled`/`briefing_time_local`/`briefing_tz` + `runs.triggered_by`), `services/monitor.py` (find_due_users + dispatch_user_watchlist + monitor_tick), arq cron at minute={0,15,30,45}, PATCH `/me/monitor`, inline `MonitorSection` on `/watchlist`, Monitor badge on `RunCard`. 23 server tests + 4 Playwright e2e. Review cycle empirically verified the persistence test was a no-op gate on the long-lived `db_session` (Wave 5.1's analog is NOT a weak gate because HTTP path uses per-request sessions that roll back uncommitted flushes — diagnosed by the implementer).
+  - **Wave 5.3 (PR #27)** — `/signals` page + `Zap` nav item; new `GET /signals/today` endpoint joins `runs ⨝ watchlist_items.notes` (LEFT JOIN) filtered by user-TZ today + `triggered_by='monitor'`, server-side `CASE`-based rank (BUY<SELL<in-flight<HOLD<FAILED), pre-ordered response. `SignalsFeed` client component with three empty-state branches + actionable/neutral two-group layout. `SignalCard` with color-coded chips, watchlist notes inline, whole-card link to `/history/[runId]`. 13 server tests + 2 vitest unit tests + 4 Playwright e2e. Smart self-flagged deviation: `isActionable` extracted to `web/app/signals/ranking.ts` because vitest can't transform JSX-bearing source under Next.js's required `jsx: preserve` tsconfig — minimum-deviation fix preserved the component's external API.
+- **Files changed across the arc:** Net new — `server/alembic/versions/{c2d3e4f5a6b7,d3e4f5a6b7c8,e4f5a6b7c8d9}_*.py`, `server/app/{models,schemas,routers}/{watchlist,monitor,signal,user(extended)}.py`, `server/app/services/monitor.py`, `server/tests/{test_watchlist,test_monitor,test_me_monitor_endpoint,test_signals_today}.py`, `web/app/{watchlist,signals}/page.tsx` + companion client components, `web/lib/api.ts` (added patch/del helpers + 4 watchlist methods + updateMonitor + signalsToday), Nav.tsx (6 items now).
+- **Tests:** 215 (post-Wave-5.2) → 228 (post-Wave-5.3, +13 signals tests). Zero regressions across all merges.
+- **Reviewer findings worth carrying forward:** (1) The "test that a write commits" pattern requires a fresh engine (not just a fresh session) on shared-cache SQLite. (2) Hand-coded TS interfaces in `web/lib/types.ts` drift from `openapi-types.ts`; replace with `components["schemas"]["X"]` re-exports. (3) Wave 5.2's looser PATCH validation (fall back to DB values when body omits them) is a real UX improvement worth keeping but needs a test to enforce the contract.
+- **Next:** Wave 5.4 Notifications. Or `types.ts` refactor to drain the drift class permanently.
 
 ---
 
