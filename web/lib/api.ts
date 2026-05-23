@@ -9,6 +9,7 @@ import type {
   RunDetailOut,
   RunListOut,
   RunTailOut,
+  SignalListOut,
   TickerDetailOut,
   UserOut,
   WatchlistItemOut,
@@ -127,6 +128,7 @@ export const api = {
     del(`/watchlist/${encodeURIComponent(ticker)}`),
   updateMonitor: (body: MonitorUpdate) =>
     patch<MonitorOut>("/me/monitor", body),
+  signalsToday: () => get<SignalListOut>("/signals/today"),
   portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
   portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),
   portfolioTicker: (ticker: string, interval?: "1d" | "1h") => {

@@ -223,6 +223,27 @@ export interface paths {
         patch: operations["update_notes_watchlist__ticker__patch"];
         trace?: never;
     };
+    "/signals/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signals Today
+         * @description Today's monitor-dispatched signals for the current user, ranked by
+         *     actionability (BUY < SELL < in-flight < HOLD < FAILED).
+         */
+        get: operations["signals_today_signals_today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -440,6 +461,38 @@ export interface components {
              * @enum {string}
              */
             status: "queued" | "running" | "succeeded" | "failed";
+        };
+        /** SignalListOut */
+        SignalListOut: {
+            /** Items */
+            items: components["schemas"]["SignalOut"][];
+            /** Trade Date */
+            trade_date: string | null;
+        };
+        /** SignalOut */
+        SignalOut: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Ticker */
+            ticker: string;
+            /** Trade Date */
+            trade_date: string;
+            /** Status */
+            status: string;
+            /** Final Rating */
+            final_rating: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Notes */
+            notes: string | null;
         };
         /** TickerDetailOut */
         TickerDetailOut: {
@@ -985,6 +1038,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WatchlistItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signals_today_signals_today_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalListOut"];
                 };
             };
             /** @description Validation Error */
