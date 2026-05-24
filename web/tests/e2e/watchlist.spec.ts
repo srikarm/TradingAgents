@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { signInAs } from "./helpers";
 
-async function signIn(page) {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/history/);
+const E2E_USER = `e2e-${crypto.randomUUID()}`;
+
+async function signIn(page: Page) {
+  await signInAs(page, E2E_USER);
 }
 
 test.describe("/watchlist", () => {
@@ -40,7 +40,7 @@ test.describe("/watchlist", () => {
     // Try to add again.
     await page.getByLabel("Ticker").fill("DUPE");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByRole("alert")).toContainText(/already on your watchlist/i);
+    await expect(page.getByText(/already on your watchlist/i)).toBeVisible();
   });
 
   test("lowercase ticker is auto-uppercased on input", async ({ page }) => {

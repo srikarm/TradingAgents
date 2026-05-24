@@ -1,11 +1,11 @@
 // web/tests/e2e/ticker-chart.spec.ts
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { signInAs } from "./helpers";
 
-async function signIn(page) {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/history/);
+const E2E_USER = `e2e-${crypto.randomUUID()}`;
+
+async function signIn(page: Page) {
+  await signInAs(page, E2E_USER);
 }
 
 test.describe("/portfolio/[ticker] chart", () => {
