@@ -1,13 +1,17 @@
 """Wave 5.2 Monitor — daily cron + due-users + per-user dispatch."""
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import get_session_factory
+from app.models.notification import MonitorBatch
+from app.models.run import Run
 from app.models.user import User
 from app.models.watchlist import WatchlistItem
 from app.schemas.run import RunCreate
@@ -103,6 +107,40 @@ async def dispatch_user_watchlist(
                 "monitor: dispatch failed for user=%s ticker=%s", user.id, ticker
             )
             failed += 1
+
+    # Wave 5.4 — record the batch for the notification sweep AFTER dispatch,
+    # with expected_count = the number of monitor runs that ACTUALLY exist for
+    # this (user, trade_date). Counting realized rows (not the optimistic
+    # ticker count) is what lets the sweep know when the batch is provably
+    # complete: a ticker that collided with a pre-existing manual run, or whose
+    # dispatch raised before its row committed, produces no monitor row and so
+    # must NOT be waited on — otherwise terminal_count could never reach an
+    # over-optimistic expected_count and the digest would silently never fire.
+    # Empty watchlist / all-failed-before-commit → no monitor runs → no batch,
+    # nothing to notify. Re-dispatch on the same local day hits
+    # UNIQUE(user_id, trade_date) and is ignored.
+    monitor_run_count = (await db.execute(
+        select(func.count())
+        .select_from(Run)
+        .where(
+            Run.user_id == user.id,
+            Run.trade_date == trade_date,
+            Run.triggered_by == "monitor",
+        )
+    )).scalar_one()
+    if monitor_run_count > 0:
+        batch = MonitorBatch(
+            id=uuid.uuid4(),
+            user_id=user.id,
+            trade_date=trade_date,
+            expected_count=monitor_run_count,
+        )
+        db.add(batch)
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+
     return {"dispatched": dispatched, "skipped_dup": skipped_dup, "failed": failed}
 
 

@@ -86,3 +86,5 @@ export type MonitorOut = components["schemas"]["MonitorOut"];
 export type MonitorUpdate = components["schemas"]["MonitorUpdate"];
 export type SignalOut = components["schemas"]["SignalOut"];
 export type SignalListOut = components["schemas"]["SignalListOut"];
+export type NotifyOut = components["schemas"]["NotifyOut"];
+export type NotifyUpdate = components["schemas"]["NotifyUpdate"];

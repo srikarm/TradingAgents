@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     # Wave 3
     price_cache_ttl_seconds: int = 86_400  # 24h
 
+    # Wave 5.4 — Notifications.
+    # public_base_url is the origin used to build absolute /signals links in
+    # notification payloads (e.g. https://tradix.axiara.ai). resend_api_key is
+    # the transactional-email provider key; when unset the notification system
+    # uses the logging-stub adapter (no real sends) so the spine works without
+    # external provisioning. notify_from_email is the verified sender address.
+    public_base_url: str = "http://localhost:3000"
+    resend_api_key: str | None = None
+    notify_from_email: str = "signals@tradix.axiara.ai"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

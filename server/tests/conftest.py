@@ -13,6 +13,7 @@ from app.models import user as _user  # noqa: F401
 from app.models import run as _run  # noqa: F401
 from app.models import memory_entry as _memory_entry  # noqa: F401
 from app.models import watchlist as _watchlist  # noqa: F401
+from app.models import notification as _notification  # noqa: F401
 
 
 @pytest_asyncio.fixture
