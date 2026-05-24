@@ -1,10 +1,10 @@
-"""Wave 5.4 (F5) — channel adapter seam + ResendAdapter wire format.
+"""Wave 5.4 (F5) — channel adapter seam + SendGridAdapter wire format.
 
-The live send is operator-gated (RESEND_API_KEY + DNS), so the real HTTP call
-can't be exercised here. These tests pin the adapter's *behavior* with httpx
-mocked: correct endpoint/headers/payload, empty-recipient guard, and that a
-provider error surfaces a debuggable message (which the deliver path records on
-the FAILED notification row).
+The live send is operator-gated (SENDGRID_API_KEY + authenticated sender
+domain), so the real HTTP call can't be exercised here. These tests pin the
+adapter's *behavior* with httpx mocked: correct endpoint/headers/payload,
+empty-recipient guard, 202-is-success, and that a provider error surfaces a
+debuggable message (which the deliver path records on the FAILED row).
 """
 import types
 
@@ -12,22 +12,22 @@ import httpx
 import pytest
 
 from app.services.notification_channels import (
-    ResendAdapter,
+    SendGridAdapter,
     StubAdapter,
     get_adapter,
-    RESEND_ENDPOINT,
+    SENDGRID_ENDPOINT,
 )
 
 
-def _settings(*, key, frm="signals@tradix.axiara.ai"):
-    return types.SimpleNamespace(resend_api_key=key, notify_from_email=frm)
+def _settings(*, key, frm="signals@axiara.ai"):
+    return types.SimpleNamespace(sendgrid_api_key=key, notify_from_email=frm)
 
 
 # ---- get_adapter routing ----
 
-def test_get_adapter_email_with_key_is_resend():
-    a = get_adapter("email", _settings(key="re_live_123"))
-    assert isinstance(a, ResendAdapter)
+def test_get_adapter_email_with_key_is_sendgrid():
+    a = get_adapter("email", _settings(key="SG.live_123"))
+    assert isinstance(a, SendGridAdapter)
     assert a.name == "email"
 
 
@@ -48,17 +48,17 @@ async def test_stub_send_does_not_raise():
     await StubAdapter().send(to="a@example.com", subject="s", text="t")
 
 
-# ---- ResendAdapter wire format (httpx mocked) ----
+# ---- SendGridAdapter wire format (httpx mocked) ----
 
 class _FakeResp:
-    def __init__(self, status_code=200, text=""):
+    def __init__(self, status_code=202, text=""):
         self.status_code = status_code
         self.text = text
 
 
 class _FakeClient:
     calls: list = []
-    next_resp = _FakeResp(200)
+    next_resp = _FakeResp(202)
 
     def __init__(self, *a, **k):
         pass
@@ -75,40 +75,40 @@ class _FakeClient:
 
 
 @pytest.mark.asyncio
-async def test_resend_send_posts_expected_payload(monkeypatch):
+async def test_sendgrid_send_posts_expected_payload(monkeypatch):
     _FakeClient.calls = []
-    _FakeClient.next_resp = _FakeResp(200)
+    _FakeClient.next_resp = _FakeResp(202)
     monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
 
-    await ResendAdapter("re_key_abc", "signals@tradix.axiara.ai").send(
+    await SendGridAdapter("SG.key_abc", "signals@axiara.ai").send(
         to="trader@example.com", subject="3 new signals", text="BUY NVDA\nView: ...",
     )
 
     assert len(_FakeClient.calls) == 1
     call = _FakeClient.calls[0]
-    assert call["url"] == RESEND_ENDPOINT
-    assert call["headers"]["Authorization"] == "Bearer re_key_abc"
-    assert call["json"]["from"] == "signals@tradix.axiara.ai"
-    assert call["json"]["to"] == ["trader@example.com"]
+    assert call["url"] == SENDGRID_ENDPOINT
+    assert call["headers"]["Authorization"] == "Bearer SG.key_abc"
+    assert call["json"]["from"] == {"email": "signals@axiara.ai"}
+    assert call["json"]["personalizations"] == [{"to": [{"email": "trader@example.com"}]}]
     assert call["json"]["subject"] == "3 new signals"
-    assert "BUY NVDA" in call["json"]["text"]
+    assert call["json"]["content"][0]["value"].startswith("BUY NVDA")
 
 
 @pytest.mark.asyncio
-async def test_resend_send_empty_recipient_raises():
+async def test_sendgrid_send_empty_recipient_raises():
     with pytest.raises(ValueError):
-        await ResendAdapter("re_key", "from@x.com").send(to="", subject="s", text="t")
+        await SendGridAdapter("SG.key", "from@x.com").send(to="", subject="s", text="t")
 
 
 @pytest.mark.asyncio
-async def test_resend_send_surfaces_provider_error(monkeypatch):
+async def test_sendgrid_send_surfaces_provider_error(monkeypatch):
     _FakeClient.calls = []
-    _FakeClient.next_resp = _FakeResp(403, '{"message":"domain not verified"}')
+    _FakeClient.next_resp = _FakeResp(403, '{"errors":[{"message":"sender identity not verified"}]}')
     monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
 
     with pytest.raises(RuntimeError) as exc:
-        await ResendAdapter("re_key", "from@x.com").send(
+        await SendGridAdapter("SG.key", "from@x.com").send(
             to="a@example.com", subject="s", text="t",
         )
     assert "403" in str(exc.value)
-    assert "domain not verified" in str(exc.value)
+    assert "sender identity not verified" in str(exc.value)

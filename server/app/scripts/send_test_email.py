@@ -1,12 +1,13 @@
-"""Send a one-off test signal-alert email to verify Resend provisioning (ISC-33).
+"""Send a one-off test signal-alert email to verify SendGrid provisioning (ISC-33).
 
 Usage:
     uv run python -m app.scripts.send_test_email you@example.com
 
-Uses the configured channel adapter: ResendAdapter when RESEND_API_KEY is set
-(a real send — the live-delivery probe), else the logging StubAdapter (prints
-instead of sending). This lets an operator confirm the email path the moment
-the key + SPF/DKIM DNS are in place, without waiting for a real monitor batch.
+Uses the configured channel adapter: SendGridAdapter when SENDGRID_API_KEY is
+set (a real send — the live-delivery probe), else the logging StubAdapter
+(prints instead of sending). This lets an operator confirm the email path the
+moment the key + SendGrid domain authentication are in place, without waiting
+for a real monitor batch.
 
 Exit 0 on success, non-zero on failure (e.g. unverified domain surfaces the
 provider's error).
