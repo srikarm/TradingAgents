@@ -35,6 +35,19 @@ class User(Base):
         String(5), nullable=True
     )
     briefing_tz: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Wave 5.4 — Notification opt-in. notify_enabled gates out-of-band
+    # delivery; notify_channel selects the adapter ('none'|'email'|'webpush');
+    # notify_threshold is the comma-separated set of ratings that count as
+    # actionable (anything else is a "quiet day" and never sends).
+    notify_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false()
+    )
+    notify_channel: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="none"
+    )
+    notify_threshold: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="BUY,SELL"
+    )
 
 
 async def find_or_create_by_identity(

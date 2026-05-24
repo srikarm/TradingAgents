@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import Nav from "@/components/Nav";
 import PageHeader from "@/components/PageHeader";
 import MonitorSection from "./MonitorSection";
+import NotificationSection from "./NotificationSection";
 import QuickAddForm from "./QuickAddForm";
 import WatchlistTable from "./WatchlistTable";
 
@@ -13,9 +14,10 @@ export default async function WatchlistPage() {
   const session = await auth();
   if (!session?.user) redirect("/api/auth/signin");
 
-  const [items, me] = await Promise.all([
+  const [items, me, notify] = await Promise.all([
     api.listWatchlist(),
     api.me(),
+    api.getNotifications(),
   ]);
 
   return (
@@ -38,6 +40,7 @@ export default async function WatchlistPage() {
             tickerCount={items.length}
             tickers={items.map((i) => i.ticker)}
           />
+          <NotificationSection initial={notify} hasEmail={me.email != null} />
           <QuickAddForm />
           <WatchlistTable initialItems={items} />
         </div>

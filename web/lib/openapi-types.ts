@@ -21,6 +21,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notifications */
+        get: operations["get_notifications_me_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Notifications
+         * @description Enable/disable out-of-band notifications + persist channel + threshold.
+         *
+         *     Mirrors the /me/monitor PATCH contract: fields omitted from the body fall
+         *     back to the stored values, so re-enabling with `{enabled: true}` works once
+         *     a channel was previously chosen. Enabling the email channel requires an
+         *     email on record (otherwise nothing could be delivered) → 422.
+         */
+        patch: operations["update_notifications_me_notifications_patch"];
+        trace?: never;
+    };
     "/me/monitor": {
         parameters: {
             query?: never;
@@ -304,6 +330,26 @@ export interface components {
             briefing_time_local?: string | null;
             /** Briefing Tz */
             briefing_tz?: string | null;
+        };
+        /** NotifyOut */
+        NotifyOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Channel */
+            channel: string;
+            /** Threshold */
+            threshold: string;
+            /** Deliverable */
+            deliverable: boolean;
+        };
+        /** NotifyUpdate */
+        NotifyUpdate: {
+            /** Enabled */
+            enabled: boolean;
+            /** Channel */
+            channel?: string | null;
+            /** Threshold */
+            threshold?: string | null;
         };
         /**
          * OHLCVBar
@@ -600,6 +646,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notifications_me_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_notifications_me_notifications_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyOut"];
                 };
             };
             /** @description Validation Error */

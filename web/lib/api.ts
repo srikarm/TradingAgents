@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import type {
   MonitorOut,
   MonitorUpdate,
+  NotifyOut,
+  NotifyUpdate,
   PortfolioCurveOut,
   PortfolioSummaryOut,
   RunCreate,
@@ -128,6 +130,9 @@ export const api = {
     del(`/watchlist/${encodeURIComponent(ticker)}`),
   updateMonitor: (body: MonitorUpdate) =>
     patch<MonitorOut>("/me/monitor", body),
+  getNotifications: () => get<NotifyOut>("/me/notifications"),
+  updateNotifications: (body: NotifyUpdate) =>
+    patch<NotifyOut>("/me/notifications", body),
   signalsToday: () => get<SignalListOut>("/signals/today"),
   portfolioSummary: () => get<PortfolioSummaryOut>("/portfolio/summary"),
   portfolioCurve: () => get<PortfolioCurveOut>("/portfolio/curve"),

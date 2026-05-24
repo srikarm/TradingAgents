@@ -2,10 +2,10 @@
 
 ## Current State
 
-- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `d415143`)
+- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `829a163`). **Wave 5.4 is in open PR #28** on `feature/notifications` (`5a6dd5d`) — not yet merged.
 - **Production URL:** **https://tradix.axiara.ai** — live on GCP Compute Engine, single-VM docker-compose stack, ~$26/mo
-- **Tests:** 228 server tests passing, 1 deselected, 0 regressions. Web: vitest unit tests + Playwright e2e specs.
-- **PRs merged:** 27 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (#15) + 1 UI modernization (#16) + 2 Indonesia (#17 + #18 hotfix) + 1 production deploy (#19) + 1 PROGRESS checkpoint (#20) + 1 deploy hot-fix bake-in (#21) + 3 Wave 4 items (#22 auth UI + #23 realtime opt-in + #24 technical chart) + 3 Wave 5 sub-projects (#25 watchlists + #26 monitor + #27 signals feed).
+- **Tests:** 263 server tests passing, 1 deselected, 0 regressions (was 228; +35 across Wave 5.4). Web: vitest unit + Playwright e2e specs (Wave 5.4 web specs written; execution pending CI `bun install`).
+- **PRs:** 27 merged + **1 open (PR #28 — Wave 5.4 notifications)**. Merged: Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (#15) + 1 UI modernization (#16) + 2 Indonesia (#17 + #18 hotfix) + 1 production deploy (#19) + 1 PROGRESS checkpoint (#20) + 1 deploy hot-fix bake-in (#21) + 3 Wave 4 items (#22 auth UI + #23 realtime opt-in + #24 technical chart) + 3 Wave 5 sub-projects (#25 watchlists + #26 monitor + #27 signals feed).
 - **GCP deploy:** Single `e2-medium` VM in `asia-southeast2-a`, Caddy reverse proxy + Let's Encrypt, GitHub Actions → ghcr.io → SSH-pull CI/CD, daily 03:00 ICT backups to `gs://tradix-backups/` (14-day lifecycle). OpenRouter (`anthropic/claude-sonnet-4.6` + `openai/gpt-4o-mini`) as prod LLM gateway.
 - **Auth (PR #22):** Auth.js v5 (NextAuth) with GitHub + Google providers + `AUTH_TRUST_HOST=true` for VM deploys; email-as-canonical-identity with provider-id legacy fallback + auto-link by email.
 - **Wave 4 UX (PRs #22-#24):** Custom `/login` page, real-time analysis opt-in checkbox + RunsBadge in nav (active count poller), TradingView lightweight-charts v5 on `/portfolio/[ticker]` with markers + DecisionTimeline.
@@ -13,27 +13,30 @@
   - **5.1 Watchlists** — per-user `watchlist_items` table (UNIQUE(user_id, ticker) + composite index), `/watchlist` page with QuickAddForm + WatchlistTable, native `<dialog>` modal for remove confirmation, inline notes editing.
   - **5.2 Monitor** — arq cron at `minute={0,15,30,45}` fires `monitor_tick` which finds users whose IANA-tz briefing time falls in the 15-min window and dispatches each watchlist ticker via `dispatch_run()` with `triggered_by='monitor'`. PATCH `/me/monitor` for user config. Inline `MonitorSection` on `/watchlist`. Monitor badge on history runs.
   - **5.3 Signals feed** — `/signals` page (Zap nav item, 6th) renders a daily briefing: actionable group (BUY/SELL/in-flight, color-coded chips) above neutral (HOLD at 60% opacity). New `GET /signals/today` endpoint joins `runs ⨝ watchlist_items.notes` (LEFT JOIN) filtered by today's user-TZ `trade_date` + `triggered_by='monitor'`. Whole-card link → `/history/[runId]`.
+  - **5.4 Notifications (PR #28, open)** — closes the freshness gap: emails a **digest** when a user's daily monitor batch lands an actionable BUY/SELL, **quiet by default** (silent on all-HOLD days), **at-most-once**. New `users.notify_{enabled,channel,threshold}` + `monitor_batches(expected_count)` + `notifications` ledger (UNIQUE(user_id, trade_date, channel)); migration `f5a6b7c8d9e0`. `GET`/`PATCH /me/notifications`; `services/notifications.py` (`should_notify` + `build_digest` + claim-first idempotent delivery via SAVEPOINT; quiet days recorded as `skipped_no_signal`); arq `notification_sweep` cron at `minute={5,20,35,50}` firing only when `terminal_count == expected_count`, current-local-day only (no retroactive blast). `NotificationSection` on `/watchlist`. Email via Resend behind a swappable adapter seam (logging stub when no key). **Live send operator-gated** on `RESEND_API_KEY` + SPF/DKIM DNS — verify with `uv run python -m app.scripts.send_test_email <addr>`.
 
 | Metric | Value |
 |---|---|
-| Local main HEAD | `d415143` (Merge PR #27) |
-| Most recent PR | #27 — `feat(signals): daily Signals feed UI — Wave 5.3`, merged 2026-05-23 |
+| Local main HEAD | `829a163` (main); Wave 5.4 on `feature/notifications` @ `5a6dd5d` |
+| Most recent PR | #28 — `feat(notifications): Wave 5.4 signal-alert notifications`, **OPEN** (not merged) |
 | Production URL | https://tradix.axiara.ai |
 | GCP VM | `tradix` (e2-medium, asia-southeast2-a, static IP `34.50.106.35`) |
 | Backup bucket | `gs://tradix-backups/` (14-day lifecycle, daily 03:00 ICT cron) |
-| Server test suite | 228 pass / 1 deselected |
-| Web vitest | 3 assertions across 2 describe blocks (isActionable + filter split) |
-| Web Playwright e2e | watchlist + monitor + signals specs (3-7 active each + 1 skipped per spec) |
-| Working tree | clean (only untracked `.DS_Store`, `node_modules`, `.claude/`, build artifacts) |
-| Alembic head | `e4f5a6b7c8d9` (Wave 5.2 monitor migration) |
+| Server test suite | 263 pass / 1 deselected (228 + 35 Wave 5.4) |
+| Web vitest | + `notification-copy` (thresholdLabel/enableDisabledReason) — execution pending CI |
+| Web Playwright e2e | + `notifications.spec.ts` (enable → threshold → reload-persist → disable) |
+| Working tree | `feature/notifications` checked out; only untracked `.DS_Store`, `node_modules`, `.claude/`, build artifacts |
+| Alembic head | `f5a6b7c8d9e0` (Wave 5.4 notifications migration) |
 
 ## What To Do Next
 
-**Wave 5 agentic monitoring loop is functionally complete (5.1 + 5.2 + 5.3 shipped).** Users can watchlist tickers, have the Monitor auto-analyze them daily at a configurable time, and see today's signals in a triaged feed. The remaining gap is notification — users still need to actively visit `/signals` to know what changed.
+**Wave 5 agentic monitoring loop is code-complete (5.1 + 5.2 + 5.3 merged; 5.4 in open PR #28).** Users can watchlist tickers, have the Monitor auto-analyze them daily, see today's signals in a triaged feed, and — once 5.4 merges + email is provisioned — get a quiet daily email digest when something actionable lands.
 
-Active focus: open. Pick from the followup queue or a new direction.
+Active focus: land Wave 5.4, then pick from the followup queue.
 
-- **Wave 5.4 Notifications (next in the agentic-monitoring arc)** — close the freshness gap that Wave 5.3 deliberately left open. Email or push when a strong-signal run lands; respects the same per-user monitor config. Followup queue from PR #27: rating-change detection (today vs yesterday delta), inline-expand Final report on the card, include manual runs (toggle), read/unread state, SSE/realtime updates.
+- **Merge PR #28 (Wave 5.4)** — review + merge `feature/notifications` into fork main. Before live alerts flow: provision `RESEND_API_KEY` + `NOTIFY_FROM_EMAIL` + `PUBLIC_BASE_URL` and add SPF/DKIM DNS for the sending domain, then verify with `uv run python -m app.scripts.send_test_email <addr>` (closes the deferred live-send check).
+- **`wave-5-4-web-verify`** — run the Wave 5.4 web suite in a deps-installed/CI env: `bun install && bun run test && bun run test:e2e && bun run build` (specs are written; local run was blocked by a declined `bun install`).
+- **Wave 5.4 followup queue (from PR #27)** — rating-change detection (today vs yesterday delta), inline-expand Final report on the signal card, include manual runs (toggle), read/unread state, SSE/realtime updates, web-push as an additive channel behind the existing adapter seam.
 - **`types.ts` refactor** — replace remaining hand-coded TS interfaces in `web/lib/types.ts` with `components["schemas"]["X"]` re-exports. The Wave 5.2 + 5.3 reviews caught three separate drift incidents (`UserOut`, `RunOut`); this refactor eliminates the class permanently.
 - **CI Node.js 20 → 24 migration** — workflow annotations warn that Node 20 actions are deprecated after Sept 2026. Bump `actions/checkout`, `docker/setup-buildx-action`, `docker/login-action`, `docker/build-push-action` to their Node 24-compatible majors.
 - **More international markets** — extend the `.JK` pattern from PR #17 to LSE `.L`, TSE `.T`, BVMF `.SA`, etc. Each = benchmark mapping + region-appropriate news source + Launch-form hint update.
@@ -41,6 +44,23 @@ Active focus: open. Pick from the followup queue or a new direction.
 - **Light-mode variant** — currently dark-only per Axiara brand. Adding light mode = `:root[data-theme="light"]` with inverted tokens + a theme toggle.
 - **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.); orthogonal to all current work; fixing them unblocks end-to-end library testing.
 - **Cloudflare proxy** — deferred from v1 design. Easy add later: switch DNS to orange-cloud + Caddy "Full (strict)" or DNS-01 ACME challenge.
+
+---
+
+## Checkpoint 2026-05-24 (Wave 5.4 notifications — built, in open PR #28)
+
+- **Session:** Resumed via `/resume`, then brainstorm → ISA design → advisor-vetted plan → executed Wave 5.4 across F1 (schema/migration) → F2 (prefs API) → F3 (notify service + adapter seam) → F4 (batch marker + sweep cron) → F6 (web UI) → F5 (Resend adapter hardening + tests + test-send). Branch `feature/notifications`, PR #28 (open against fork main).
+- **Branch:** `main` rewound to `829a163`; work lives on `feature/notifications` @ `5a6dd5d` (2 commits: `e280ccb` F1–F4+F6, `5a6dd5d` F5).
+- **Done:**
+  - **Schema/migration (`f5a6b7c8d9e0`)** — `users.notify_{enabled,channel,threshold}` (opt-in, defaults false/none/`BUY,SELL`); `monitor_batches(expected_count)` + `notifications` ledger UNIQUE(user_id, trade_date, channel). Reversible round-trip verified.
+  - **Prefs API** — `GET`/`PATCH /me/notifications` (enabling email requires an address → 422; omitted fields fall back to stored, mirroring `/me/monitor`).
+  - **Notify service** — `should_notify`/`build_digest` (quiet-by-default), claim-first idempotent delivery via `begin_nested` SAVEPOINT, quiet days recorded as `skipped_no_signal` (auditable silence). Swappable channel adapter seam (Stub + Resend; stub when no key).
+  - **Batch marker + sweep cron** — `monitor_batches` written AFTER dispatch with `expected_count` = realized monitor-run count; `notification_sweep` arq cron at `minute={5,20,35,50}` fires only when `terminal_count == expected_count`, restricted to the user's current local day.
+  - **Web** — `NotificationSection` on `/watchlist` (toggle + editable threshold + no-email hint) + `api.ts` methods + regenerated OpenAPI types; vitest + Playwright specs written.
+  - **F5 live email** — `ResendAdapter` hardened (empty-recipient guard, provider-error body surfaced) + wire-tested; `app/scripts/send_test_email.py` one-command verifier. Live send operator-gated on `RESEND_API_KEY` + DNS.
+- **Tests:** 228 → **263** server (+35: prefs, service, sweep, adapter), 1 deselected, 0 regressions. Web specs written; execution deferred to CI (`bun install` declined locally).
+- **Reviewer findings worth carrying forward:** (1) **Advisor (PLAN)** caught a vacuous-true completeness predicate — "zero non-terminal runs" is true before any run exists; fixed with an explicit `monitor_batches(expected_count)` marker. (2) **Forge cross-vendor review (VERIFY)** caught a HIGH: `expected_count = len(tickers)` is optimistic — a manual-run collision or pre-commit dispatch failure leaves no monitor row, so the count never resolves and the digest silently stalls forever. Fixed: `expected_count` = realized `COUNT(monitor runs)` after dispatch; regression-tested. Lesson: derive a completeness gate's target from the same population the gate measures. (3) Idempotency: a failed async `flush()` must be contained in a SAVEPOINT (`begin_nested`) or it poisons the session's greenlet context.
+- **Next:** Merge PR #28; provision Resend key + DNS and run the test-send; run `wave-5-4-web-verify` in CI.
 
 ---
 
