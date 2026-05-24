@@ -29,13 +29,14 @@ class Settings(BaseSettings):
 
     # Wave 5.4 — Notifications.
     # public_base_url is the origin used to build absolute /signals links in
-    # notification payloads (e.g. https://tradix.axiara.ai). resend_api_key is
+    # notification payloads (e.g. https://tradix.axiara.ai). sendgrid_api_key is
     # the transactional-email provider key; when unset the notification system
     # uses the logging-stub adapter (no real sends) so the spine works without
-    # external provisioning. notify_from_email is the verified sender address.
+    # external provisioning. notify_from_email is the verified sender address
+    # (must be on a SendGrid-authenticated domain).
     public_base_url: str = "http://localhost:3000"
-    resend_api_key: str | None = None
-    notify_from_email: str = "signals@tradix.axiara.ai"
+    sendgrid_api_key: str | None = None
+    notify_from_email: str = "signals@axiara.ai"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
