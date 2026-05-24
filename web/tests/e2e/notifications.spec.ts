@@ -1,11 +1,11 @@
 // web/tests/e2e/notifications.spec.ts — Wave 5.4 signal-alerts prefs UI.
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { signInAs } from "./helpers";
 
-async function signIn(page) {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/history/);
+const E2E_USER = `e2e-${crypto.randomUUID()}`;
+
+async function signIn(page: Page) {
+  await signInAs(page, E2E_USER);
 }
 
 test.describe("/watchlist signal alerts", () => {
@@ -15,7 +15,7 @@ test.describe("/watchlist signal alerts", () => {
 
     // Card is present and OFF.
     await expect(page.getByText("Signal alerts", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: /^enable$/i }).nth(1).click();
+    await page.getByRole("button", { name: /enable alerts/i }).click();
 
     // ON state surfaces the threshold control + Disable.
     await expect(page.getByText("Signal alerts on")).toBeVisible();
@@ -36,8 +36,8 @@ test.describe("/watchlist signal alerts", () => {
   test("disable returns to OFF and persists on reload", async ({ page }) => {
     await signIn(page);
     await page.goto("/watchlist");
-    // Sequential to the prior test — alerts were enabled.
-    await page.getByRole("button", { name: /^disable$/i }).click();
+    // Sequential: the prior test enabled alerts for this spec's shared user.
+    await page.getByRole("button", { name: /disable alerts/i }).click();
     await expect(page.getByText("Signal alerts", { exact: true })).toBeVisible();
 
     await page.reload();

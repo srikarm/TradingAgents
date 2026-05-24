@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { signInAs } from "./helpers";
 
-async function signIn(page) {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/history/);
+const E2E_USER = `e2e-${crypto.randomUUID()}`;
+
+async function signIn(page: Page) {
+  await signInAs(page, E2E_USER);
 }
 
 test.describe("/signals", () => {
@@ -24,6 +24,10 @@ test.describe("/signals", () => {
   test("no-signals-yet empty state renders after enabling", async ({ page }) => {
     await signIn(page);
     await page.goto("/watchlist");
+    // Monitor "Enable" is disabled until the watchlist has a ticker.
+    await page.getByLabel("Ticker").fill("SIG");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await expect(page.getByRole("link", { name: "SIG" })).toBeVisible();
     await page.getByRole("button", { name: /^enable$/i }).click();
     await page.goto("/signals");
     await expect(page.getByRole("heading", { name: /No signals yet/i })).toBeVisible();

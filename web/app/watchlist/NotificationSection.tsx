@@ -77,11 +77,11 @@ export default function NotificationSection({
             title={blocked ?? undefined}
             className="inline-flex h-8 items-center rounded-lg border border-brand/60 bg-brand/10 px-3 text-xs font-medium text-brand transition-colors hover:bg-brand/15 disabled:opacity-50"
           >
-            Enable
+            Enable alerts
           </button>
         </div>
         <p className="mt-1.5 text-xs text-fg-muted">
-          {blocked ?? "Get an email when your daily monitor lands an actionable signal — silent on all-HOLD days."}
+          {blocked ?? "Get an email when an actionable signal lands — silent on all-HOLD days."}
         </p>
       </div>
     );
@@ -100,7 +100,7 @@ export default function NotificationSection({
           onClick={onDisable}
           className="h-8 rounded-lg border border-border/60 bg-surface/40 px-3 text-xs text-fg-muted hover:text-fg"
         >
-          Disable
+          Disable alerts
         </button>
       </div>
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
