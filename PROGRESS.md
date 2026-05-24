@@ -2,10 +2,10 @@
 
 ## Current State
 
-- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `829a163`). **Wave 5.4 is in open PR #28** on `feature/notifications` (`5a6dd5d`) — not yet merged.
+- **Branch:** `main` (synced with fork `erikgunawans/TradingAgents:main` at `e7c79c4`). **Wave 5.4 merged** (PR #28) + **SendGrid pivot merged** (PR #29).
 - **Production URL:** **https://tradix.axiara.ai** — live on GCP Compute Engine, single-VM docker-compose stack, ~$26/mo
 - **Tests:** 263 server tests passing, 1 deselected, 0 regressions (was 228; +35 across Wave 5.4). Web: vitest unit + Playwright e2e specs (Wave 5.4 web specs written; execution pending CI `bun install`).
-- **PRs:** 27 merged + **1 open (PR #28 — Wave 5.4 notifications)**. Merged: Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (#15) + 1 UI modernization (#16) + 2 Indonesia (#17 + #18 hotfix) + 1 production deploy (#19) + 1 PROGRESS checkpoint (#20) + 1 deploy hot-fix bake-in (#21) + 3 Wave 4 items (#22 auth UI + #23 realtime opt-in + #24 technical chart) + 3 Wave 5 sub-projects (#25 watchlists + #26 monitor + #27 signals feed).
+- **PRs merged:** 29 total — Waves 1-3 (PRs #1-#3) + 12 v3+ followups (PRs #4-#14) + 1 worker hotfix (#15) + 1 UI modernization (#16) + 2 Indonesia (#17 + #18 hotfix) + 1 production deploy (#19) + 1 PROGRESS checkpoint (#20) + 1 deploy hot-fix bake-in (#21) + 3 Wave 4 items (#22-#24) + 3 Wave 5 sub-projects (#25-#27) + **Wave 5.4 notifications (#28)** + **email channel Resend→SendGrid pivot (#29)**.
 - **GCP deploy:** Single `e2-medium` VM in `asia-southeast2-a`, Caddy reverse proxy + Let's Encrypt, GitHub Actions → ghcr.io → SSH-pull CI/CD, daily 03:00 ICT backups to `gs://tradix-backups/` (14-day lifecycle). OpenRouter (`anthropic/claude-sonnet-4.6` + `openai/gpt-4o-mini`) as prod LLM gateway.
 - **Auth (PR #22):** Auth.js v5 (NextAuth) with GitHub + Google providers + `AUTH_TRUST_HOST=true` for VM deploys; email-as-canonical-identity with provider-id legacy fallback + auto-link by email.
 - **Wave 4 UX (PRs #22-#24):** Custom `/login` page, real-time analysis opt-in checkbox + RunsBadge in nav (active count poller), TradingView lightweight-charts v5 on `/portfolio/[ticker]` with markers + DecisionTimeline.
@@ -13,28 +13,28 @@
   - **5.1 Watchlists** — per-user `watchlist_items` table (UNIQUE(user_id, ticker) + composite index), `/watchlist` page with QuickAddForm + WatchlistTable, native `<dialog>` modal for remove confirmation, inline notes editing.
   - **5.2 Monitor** — arq cron at `minute={0,15,30,45}` fires `monitor_tick` which finds users whose IANA-tz briefing time falls in the 15-min window and dispatches each watchlist ticker via `dispatch_run()` with `triggered_by='monitor'`. PATCH `/me/monitor` for user config. Inline `MonitorSection` on `/watchlist`. Monitor badge on history runs.
   - **5.3 Signals feed** — `/signals` page (Zap nav item, 6th) renders a daily briefing: actionable group (BUY/SELL/in-flight, color-coded chips) above neutral (HOLD at 60% opacity). New `GET /signals/today` endpoint joins `runs ⨝ watchlist_items.notes` (LEFT JOIN) filtered by today's user-TZ `trade_date` + `triggered_by='monitor'`. Whole-card link → `/history/[runId]`.
-  - **5.4 Notifications (PR #28, open)** — closes the freshness gap: emails a **digest** when a user's daily monitor batch lands an actionable BUY/SELL, **quiet by default** (silent on all-HOLD days), **at-most-once**. New `users.notify_{enabled,channel,threshold}` + `monitor_batches(expected_count)` + `notifications` ledger (UNIQUE(user_id, trade_date, channel)); migration `f5a6b7c8d9e0`. `GET`/`PATCH /me/notifications`; `services/notifications.py` (`should_notify` + `build_digest` + claim-first idempotent delivery via SAVEPOINT; quiet days recorded as `skipped_no_signal`); arq `notification_sweep` cron at `minute={5,20,35,50}` firing only when `terminal_count == expected_count`, current-local-day only (no retroactive blast). `NotificationSection` on `/watchlist`. Email via Resend behind a swappable adapter seam (logging stub when no key). **Live send operator-gated** on `RESEND_API_KEY` + SPF/DKIM DNS — verify with `uv run python -m app.scripts.send_test_email <addr>`.
+  - **5.4 Notifications (PR #28 + #29, merged)** — closes the freshness gap: emails a **digest** when a user's daily monitor batch lands an actionable BUY/SELL, **quiet by default** (silent on all-HOLD days), **at-most-once**. New `users.notify_{enabled,channel,threshold}` + `monitor_batches(expected_count)` + `notifications` ledger (UNIQUE(user_id, trade_date, channel)); migration `f5a6b7c8d9e0`. `GET`/`PATCH /me/notifications`; `services/notifications.py` (`should_notify` + `build_digest` + claim-first idempotent delivery via SAVEPOINT; quiet days recorded as `skipped_no_signal`); arq `notification_sweep` cron at `minute={5,20,35,50}` firing only when `terminal_count == expected_count`, current-local-day only (no retroactive blast). `NotificationSection` on `/watchlist`. **Email via SendGrid** (pivoted from Resend in PR #29 — axiara.ai SPF already includes `sendgrid.net`) behind a swappable adapter seam (logging stub when no key). **Live send operator-gated** on `SENDGRID_API_KEY` + SendGrid domain authentication (3 DKIM CNAMEs in Cloudflare) — verify with `uv run python -m app.scripts.send_test_email <addr>`.
 
 | Metric | Value |
 |---|---|
-| Local main HEAD | `829a163` (main); Wave 5.4 on `feature/notifications` @ `5a6dd5d` |
-| Most recent PR | #28 — `feat(notifications): Wave 5.4 signal-alert notifications`, **OPEN** (not merged) |
+| Local main HEAD | `e7c79c4` (Merge PR #29 — SendGrid pivot) |
+| Most recent PR | #29 — `pivot email channel Resend→SendGrid`, merged 2026-05-24 (Wave 5.4 = #28, merged) |
 | Production URL | https://tradix.axiara.ai |
 | GCP VM | `tradix` (e2-medium, asia-southeast2-a, static IP `34.50.106.35`) |
 | Backup bucket | `gs://tradix-backups/` (14-day lifecycle, daily 03:00 ICT cron) |
 | Server test suite | 263 pass / 1 deselected (228 + 35 Wave 5.4) |
 | Web vitest | + `notification-copy` (thresholdLabel/enableDisabledReason) — execution pending CI |
 | Web Playwright e2e | + `notifications.spec.ts` (enable → threshold → reload-persist → disable) |
-| Working tree | `feature/notifications` checked out; only untracked `.DS_Store`, `node_modules`, `.claude/`, build artifacts |
+| Working tree | clean on `main`; only untracked `.DS_Store`, `node_modules`, `.claude/`, build artifacts |
 | Alembic head | `f5a6b7c8d9e0` (Wave 5.4 notifications migration) |
 
 ## What To Do Next
 
-**Wave 5 agentic monitoring loop is code-complete (5.1 + 5.2 + 5.3 merged; 5.4 in open PR #28).** Users can watchlist tickers, have the Monitor auto-analyze them daily, see today's signals in a triaged feed, and — once 5.4 merges + email is provisioned — get a quiet daily email digest when something actionable lands.
+**Wave 5 agentic monitoring loop is fully merged (5.1 + 5.2 + 5.3 + 5.4, PRs #25-#29).** Users can watchlist tickers, have the Monitor auto-analyze them daily, see today's signals in a triaged feed, and — once email is provisioned — get a quiet daily SendGrid digest when something actionable lands.
 
-Active focus: land Wave 5.4, then pick from the followup queue.
+Active focus: provision SendGrid to switch live alerts on, then pick from the followup queue.
 
-- **Merge PR #28 (Wave 5.4)** — review + merge `feature/notifications` into fork main. Before live alerts flow: provision `RESEND_API_KEY` + `NOTIFY_FROM_EMAIL` + `PUBLIC_BASE_URL` and add SPF/DKIM DNS for the sending domain, then verify with `uv run python -m app.scripts.send_test_email <addr>` (closes the deferred live-send check).
+- **Provision SendGrid email (operator-only)** — (1) SendGrid Domain Authentication for `axiara.ai` → add the 3 DKIM CNAMEs it issues to Cloudflare (DNS-only); optionally fix the malformed SPF `\010`. (2) Create a Mail-Send API key. (3) Set `SENDGRID_API_KEY` + `NOTIFY_FROM_EMAIL=signals@axiara.ai` + `PUBLIC_BASE_URL=https://tradix.axiara.ai` in server `.env`; restart api+worker. (4) Verify: `uv run python -m app.scripts.send_test_email <addr>` (closes the deferred live-send check ISC-33). SPF already includes `sendgrid.net`.
 - **`wave-5-4-web-verify`** — run the Wave 5.4 web suite in a deps-installed/CI env: `bun install && bun run test && bun run test:e2e && bun run build` (specs are written; local run was blocked by a declined `bun install`).
 - **Wave 5.4 followup queue (from PR #27)** — rating-change detection (today vs yesterday delta), inline-expand Final report on the signal card, include manual runs (toggle), read/unread state, SSE/realtime updates, web-push as an additive channel behind the existing adapter seam.
 - **`types.ts` refactor** — replace remaining hand-coded TS interfaces in `web/lib/types.ts` with `components["schemas"]["X"]` re-exports. The Wave 5.2 + 5.3 reviews caught three separate drift incidents (`UserOut`, `RunOut`); this refactor eliminates the class permanently.
@@ -44,6 +44,20 @@ Active focus: land Wave 5.4, then pick from the followup queue.
 - **Light-mode variant** — currently dark-only per Axiara brand. Adding light mode = `:root[data-theme="light"]` with inverted tokens + a theme toggle.
 - **Library test infrastructure** — root-level `uv run pytest` has 11 pre-existing collection errors (`test_signal_processing.py`, `test_structured_agents.py`, `test_ticker_symbol_handling.py`, etc.); orthogonal to all current work; fixing them unblocks end-to-end library testing.
 - **Cloudflare proxy** — deferred from v1 design. Easy add later: switch DNS to orange-cloud + Caddy "Full (strict)" or DNS-01 ACME challenge.
+
+---
+
+## Checkpoint 2026-05-24 (Wave 5.4 merged + SendGrid pivot merged — PRs #28, #29)
+
+- **Session:** Landed Wave 5.4: merged PR #28 (notifications F1–F6), then discovered axiara.ai's SPF already authorizes `sendgrid.net` while prepping email provisioning → pivoted the email channel Resend→SendGrid (PR #29, merged). Also pruned all stale branches/worktrees (34 branches, 17 worktrees) — repo down to `main` only.
+- **Branch:** `main` @ `e7c79c4` (Merge PR #29).
+- **Done:**
+  - **PR #28 merged** — full Wave 5.4 notification spine (schema/migration `f5a6b7c8d9e0`, prefs API, notify service, batch marker + sweep cron, web `NotificationSection`).
+  - **PR #29 merged** — `ResendAdapter` → `SendGridAdapter` (v3 `/mail/send`, 202=success, provider-error body surfaced) behind the existing adapter seam; `resend_api_key` → `sendgrid_api_key`; tests retargeted. Service layer unchanged. No `resend` refs remain.
+  - **Cleanup** — deleted 19 merged `feature/`/`chore/` branches + 15 `worktree-agent-*` branches, removed 17 stale locked worktrees, cleared orphaned dirs.
+- **Tests:** 263 server pass / 1 deselected, 0 regressions (across both PRs). Web specs written; CI run deferred (`wave-5-4-web-verify`).
+- **DNS finding:** axiara.ai is on **Cloudflare** (no gcloud/API access from here); SPF already lists `sendgrid.net` (so SendGrid = less setup than Resend) but the SPF TXT looks malformed (stray `\010`) — worth a fix during domain auth.
+- **Next:** Operator provisions SendGrid (domain auth → 3 DKIM CNAMEs in Cloudflare → API key → `.env` → restart → `send_test_email`). Then `wave-5-4-web-verify` in CI.
 
 ---
 
