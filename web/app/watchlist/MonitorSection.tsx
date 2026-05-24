@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
-import { api } from "@/lib/api";
-import type { MonitorOut } from "@/lib/types";
+import { updateMonitorAction } from "@/app/actions";
 
 type MonitorState = {
   enabled: boolean;
@@ -58,11 +57,13 @@ export default function MonitorSection({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await api.updateMonitor({
+        const r = await updateMonitorAction({
           enabled: merged.enabled,
           briefing_time_local: merged.briefingTimeLocal,
           briefing_tz: merged.briefingTz,
         });
+        if (!r.ok) throw new Error(r.message);
+        const res = r.data;
         setState({
           enabled: res.enabled,
           briefingTimeLocal: res.briefing_time_local,
@@ -80,9 +81,11 @@ export default function MonitorSection({
     const time = state.briefingTimeLocal ?? "07:00";
     // Immediate POST so the user is "on" right away — bypass the 800ms debounce.
     try {
-      const res = await api.updateMonitor({
+      const r = await updateMonitorAction({
         enabled: true, briefing_time_local: time, briefing_tz: tz,
       });
+      if (!r.ok) throw new Error(r.message);
+      const res = r.data;
       setState({
         enabled: true,
         briefingTimeLocal: res.briefing_time_local,
@@ -96,7 +99,9 @@ export default function MonitorSection({
 
   async function onDisable() {
     try {
-      const res = await api.updateMonitor({ enabled: false });
+      const r = await updateMonitorAction({ enabled: false });
+      if (!r.ok) throw new Error(r.message);
+      const res = r.data;
       setState((s) => ({
         ...s,
         enabled: false,
