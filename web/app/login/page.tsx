@@ -2,6 +2,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import SignInForm from "./SignInForm";
+import E2ESignIn from "./E2ESignIn";
 
 export const metadata = {
   title: "Sign in · TradingAgents",
@@ -43,6 +44,9 @@ export default async function LoginPage({ searchParams }: PageProps) {
           Continue with your preferred account
         </p>
         <SignInForm callbackUrl={isSafeRedirect(callbackUrl) ? callbackUrl : undefined} error={error} />
+        {process.env.E2E_TEST_MODE === "1" && (
+          <E2ESignIn callbackUrl={isSafeRedirect(callbackUrl) ? callbackUrl : undefined} />
+        )}
       </div>
     </main>
   );
