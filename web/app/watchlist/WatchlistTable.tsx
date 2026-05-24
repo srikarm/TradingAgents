@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { removeFromWatchlistAction, updateWatchlistNotesAction } from "@/app/actions";
 import type { WatchlistItemOut } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -35,7 +35,8 @@ export default function WatchlistTable({
   async function saveNotes(ticker: string) {
     const next = editNotes.trim() || null;
     try {
-      await api.updateWatchlistNotes(ticker, next);
+      const r = await updateWatchlistNotesAction(ticker, next);
+      if (!r.ok) throw new Error(r.message);
       setItems((prev) =>
         prev.map((i) => (i.ticker === ticker ? { ...i, notes: next } : i)),
       );
@@ -53,7 +54,8 @@ export default function WatchlistTable({
     setRemoveTarget(null);
     dialogRef.current?.close();
     try {
-      await api.removeFromWatchlist(ticker);
+      const r = await removeFromWatchlistAction(ticker);
+      if (!r.ok) throw new Error(r.message);
       setItems((prev) => prev.filter((i) => i.ticker !== ticker));
     } catch (e) {
       console.error("remove failed", e);

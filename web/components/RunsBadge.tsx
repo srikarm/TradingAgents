@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { countActiveRunsAction } from "@/app/actions";
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -14,12 +14,11 @@ export default function RunsBadge() {
     let cancelled = false;
     const tick = async () => {
       try {
-        const n = await api.countActiveRuns();
-        if (!cancelled) setCount(n);
+        const r = await countActiveRunsAction();
+        if (r.ok && !cancelled) setCount(r.data);
+        // !ok (network blip / signed-out tab): keep last value; next tick retries.
       } catch {
-        // Network blip or 401 (signed-out tab). Keep last value;
-        // next tick will retry. The badge will simply stay stale
-        // until network recovers.
+        // Defensive: the action shouldn't throw, but never let the poller die.
       }
     };
     void tick();

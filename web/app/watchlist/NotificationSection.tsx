@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Bell } from "lucide-react";
-import { api } from "@/lib/api";
+import { updateNotificationsAction } from "@/app/actions";
 import { enableDisabledReason, thresholdLabel } from "./notification-copy";
 
 type NotifyState = {
@@ -26,8 +26,9 @@ export default function NotificationSection({
   async function onEnable() {
     setError(null);
     try {
-      const res = await api.updateNotifications({ enabled: true, channel: "email" });
-      setState(res);
+      const r = await updateNotificationsAction({ enabled: true, channel: "email" });
+      if (!r.ok) throw new Error(r.message);
+      setState(r.data);
     } catch (e) {
       setError("Couldn't enable alerts.");
       console.error("notifications enable failed", e);
@@ -37,8 +38,9 @@ export default function NotificationSection({
   async function onDisable() {
     setError(null);
     try {
-      const res = await api.updateNotifications({ enabled: false });
-      setState(res);
+      const r = await updateNotificationsAction({ enabled: false });
+      if (!r.ok) throw new Error(r.message);
+      setState(r.data);
     } catch (e) {
       console.error("notifications disable failed", e);
     }
@@ -49,8 +51,9 @@ export default function NotificationSection({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await api.updateNotifications({ enabled: true, threshold: next });
-        setState(res);
+        const r = await updateNotificationsAction({ enabled: true, threshold: next });
+        if (!r.ok) throw new Error(r.message);
+        setState(r.data);
       } catch (e) {
         console.error("notifications threshold save failed", e);
       }

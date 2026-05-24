@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
+import { addToWatchlistAction } from "@/app/actions";
 
 const TICKER_PATTERN = /^[A-Z][A-Z0-9.\-]{0,11}$/;
 
@@ -25,18 +25,20 @@ export default function QuickAddForm() {
 
     setSubmitting(true);
     try {
-      await api.addToWatchlist(ticker, notes.trim() || null);
+      const r = await addToWatchlistAction(ticker, notes.trim() || null);
+      if (!r.ok) {
+        if (r.status === 409) {
+          setError(`${ticker} is already on your watchlist.`);
+        } else if (r.status === 422) {
+          setError("Server rejected this ticker. Use only uppercase letters, digits, '.' or '-'.");
+        } else {
+          setError(r.message);
+        }
+        return;
+      }
       setTicker("");
       setNotes("");
       router.refresh(); // Re-fetch the server component's data.
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setError(`${ticker} is already on your watchlist.`);
-      } else if (e instanceof ApiError && e.status === 422) {
-        setError("Server rejected this ticker. Use only uppercase letters, digits, '.' or '-'.");
-      } else {
-        setError(e instanceof Error ? e.message : String(e));
-      }
     } finally {
       setSubmitting(false);
     }
