@@ -52,6 +52,12 @@ class ResendAdapter:
     async def send(self, *, to: str, subject: str, text: str) -> None:
         import httpx
 
+        if not to:
+            # The deliver path passes user.email; a blank address means the
+            # account lost its email after enabling. Fail loudly so it lands as
+            # a FAILED notification row with a clear reason, not a Resend 422.
+            raise ValueError("ResendAdapter: empty recipient address")
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.post(
                 RESEND_ENDPOINT,
@@ -63,7 +69,13 @@ class ResendAdapter:
                     "text": text,
                 },
             )
-            res.raise_for_status()
+            if res.status_code >= 400:
+                # Surface the provider's body — raise_for_status alone hides WHY
+                # (unverified domain, invalid sender, rate limit). The caller
+                # records this string on the failed notification row.
+                raise RuntimeError(
+                    f"Resend send failed: {res.status_code} {res.text[:300]}"
+                )
 
 
 def get_adapter(channel: str, settings) -> ChannelAdapter | None:
