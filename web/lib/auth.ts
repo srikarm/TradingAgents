@@ -4,7 +4,15 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 
 const secret = process.env.NEXTAUTH_SECRET;
-if (!secret) throw new Error("NEXTAUTH_SECRET is required");
+// The secret is only ever used server-side (JWT signing in bearer()/NextAuth).
+// Scope the hard-fail to the server: this module transitively reaches the
+// browser bundle via client components that import @/lib/api, and under
+// `next dev` process.env.NEXTAUTH_SECRET is undefined client-side (no build-time
+// inlining like prod's Dockerfile does), which would otherwise crash every
+// authed page on hydration. Production (server) behaviour is unchanged.
+if (!secret && typeof window === "undefined") {
+  throw new Error("NEXTAUTH_SECRET is required");
+}
 
 const providers: NextAuthConfig["providers"] = [
   GitHub({
