@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: unit + typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Server tests
+        working-directory: server
+        env:
+          NEXTAUTH_SECRET: ci-secret
+          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DASHBOARD_DATA_DIR: /tmp/ci-data
+        run: uv run pytest -q
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Web deps
+        working-directory: web
+        run: bun install
+
+      - name: Web typecheck
+        working-directory: web
+        run: bun run typecheck
+
+      - name: Web unit tests
+        working-directory: web
+        run: bun run test
+
+      - name: Web build
+        working-directory: web
+        env:
+          NEXTAUTH_SECRET: ci-build-secret
+          API_BASE_URL: http://localhost:8000
+        run: bun run build
+
+  e2e:
+    name: playwright e2e
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trading
+          POSTGRES_PASSWORD: trading
+          POSTGRES_DB: trading_dashboard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U trading -d trading_dashboard"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      NEXTAUTH_SECRET: ci-e2e-secret
+      DATABASE_URL: postgresql+asyncpg://trading:trading@localhost:5432/trading_dashboard
+      DASHBOARD_DATA_DIR: /tmp/ci-e2e-data
+      REDIS_URL: redis://localhost:6379/0
+      API_BASE_URL: http://localhost:8000
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      E2E_TEST_MODE: "1"
+      AUTH_GITHUB_ID: dummy
+      AUTH_GITHUB_SECRET: dummy
+      AUTH_GOOGLE_ID: dummy
+      AUTH_GOOGLE_SECRET: dummy
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Web deps
+        working-directory: web
+        run: bun install
+
+      - name: Playwright browsers
+        working-directory: web
+        run: bunx playwright install --with-deps chromium
+
+      - name: Migrate + seed fixture
+        working-directory: server
+        run: |
+          uv run alembic upgrade head
+          uv run python -m app.scripts.seed_e2e
+
+      - name: Start API (uvicorn)
+        working-directory: server
+        run: |
+          uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:8000/me)" = "401" ] && { echo "api up"; break; }
+            sleep 1
+          done
+
+      - name: Start web (next dev, E2E mode)
+        working-directory: web
+        run: |
+          bun run dev > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://localhost:3000/login)" = "200" ] && { echo "web up"; break; }
+            sleep 1
+          done
+
+      - name: Playwright e2e
+        working-directory: web
+        run: bun run test:e2e
+
+      - name: Server logs on failure
+        if: failure()
+        run: tail -50 /tmp/api.log /tmp/web.log || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
