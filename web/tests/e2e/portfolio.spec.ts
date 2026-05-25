@@ -6,8 +6,10 @@ test("portfolio page renders headings and metric cards", async ({ page }) => {
 
   await page.goto("/portfolio");
   await expect(page.getByRole("heading", { name: "Portfolio" })).toBeVisible();
-  await expect(page.getByText("Cumulative P&L")).toBeVisible();
-  await expect(page.getByText("Win rate")).toBeVisible();
-  await expect(page.getByText(/Sharpe/i)).toBeVisible();
-  await expect(page.getByText("Max drawdown")).toBeVisible();
+  // Each label can appear on both a metric card and a chart axis/legend, so
+  // match the first occurrence rather than asserting a single match.
+  await expect(page.getByText("Cumulative P&L").first()).toBeVisible();
+  await expect(page.getByText("Win rate").first()).toBeVisible();
+  await expect(page.getByText(/Sharpe/i).first()).toBeVisible();
+  await expect(page.getByText("Max drawdown").first()).toBeVisible();
 });

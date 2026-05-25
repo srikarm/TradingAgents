@@ -18,7 +18,7 @@ test("launch a run and observe queued status on live monitor", async ({ page }) 
   await page.goto("/launch");
   await page.getByRole("textbox", { name: /ticker/i }).fill("TSLA");
   await page.getByLabel("Trade date").fill("2024-05-10");
-  await page.getByRole("button", { name: /^launch$/i }).click();
+  await page.getByRole("button", { name: /launch analysis/i }).click();
 
   // We should be redirected to /live/<run_id>
   await page.waitForURL(/\/live\/[a-f0-9-]+/);
