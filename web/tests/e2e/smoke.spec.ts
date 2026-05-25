@@ -18,6 +18,9 @@ test("launch a run and observe queued status on live monitor", async ({ page }) 
   await page.goto("/launch");
   await page.getByRole("textbox", { name: /ticker/i }).fill("TSLA");
   await page.getByLabel("Trade date").fill("2024-05-10");
+  // Opt into the live monitor — otherwise launch redirects to /history (the
+  // Wave 4 realtime opt-in default), not /live.
+  await page.getByRole("checkbox", { name: /watch live/i }).check();
   await page.getByRole("button", { name: /launch analysis/i }).click();
 
   // We should be redirected to /live/<run_id>
