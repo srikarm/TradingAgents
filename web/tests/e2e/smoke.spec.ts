@@ -26,6 +26,7 @@ test("launch a run and observe queued status on live monitor", async ({ page }) 
   // We should be redirected to /live/<run_id>
   await page.waitForURL(/\/live\/[a-f0-9-]+/);
   await expect(page.getByRole("heading", { name: "TSLA", exact: true })).toBeVisible();
-  // Status pill renders one of the expected states
-  await expect(page.locator("strong").filter({ hasText: /QUEUED|RUNNING|SUCCEEDED|FAILED/ }).first()).toBeVisible();
+  // Status badge renders one of the expected states (case-insensitive — the
+  // StatusBadge label is title-case, e.g. "Queued").
+  await expect(page.getByText(/queued|running|succeeded|failed/i).first()).toBeVisible();
 });
