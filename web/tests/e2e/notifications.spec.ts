@@ -22,10 +22,13 @@ test.describe("/watchlist signal alerts", () => {
     const threshold = page.getByLabel("Alert ratings");
     await expect(threshold).toBeVisible();
 
-    // Edit threshold and wait past the 800ms debounce.
+    // Edit threshold; the save is debounced 800ms then a server action commits.
     await threshold.fill("BUY");
-    await page.waitForTimeout(1200);
     await expect(page.getByText(/We'll email you when a BUY signal lands/i)).toBeVisible();
+    // Wait for the debounced PATCH to actually land before reloading (the client
+    // copy updates immediately, but the server persist lags — flaky under CI).
+    await page.waitForTimeout(1000); // debounce
+    await page.waitForLoadState("networkidle");
 
     // ROUND-TRIP: reload and confirm the enabled + threshold state persisted.
     await page.reload();

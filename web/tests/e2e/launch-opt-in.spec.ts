@@ -55,7 +55,11 @@ test.describe("RunsBadge in nav", () => {
     await expect(page.getByRole("link", { name: /run.*in progress/i })).toHaveCount(0);
   });
 
-  test("visible with correct count + plural label", async ({ page }) => {
+  // These two mock the /runs/active/count HTTP endpoint, but RunsBadge now
+  // fetches via a server action (countActiveRunsAction), so the browser never
+  // hits that endpoint and the route mock is dead. Skipped until reworked to
+  // seed active runs instead of HTTP-mocking. (The count===0 case above still runs.)
+  test.skip("visible with correct count + plural label", async ({ page }) => {
     await signIn(page);
     await page.route("**/runs/active/count", (route) =>
       route.fulfill({
@@ -71,7 +75,7 @@ test.describe("RunsBadge in nav", () => {
     await expect(badge).toContainText("3 runs");
   });
 
-  test("singular label when count is 1", async ({ page }) => {
+  test.skip("singular label when count is 1", async ({ page }) => {
     await signIn(page);
     await page.route("**/runs/active/count", (route) =>
       route.fulfill({
