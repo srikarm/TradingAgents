@@ -23,7 +23,7 @@ jobs:
         working-directory: server
         env:
           NEXTAUTH_SECRET: ci-secret
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           DASHBOARD_DATA_DIR: /tmp/ci-data
         run: uv run pytest -q
 
@@ -46,7 +46,7 @@ jobs:
         working-directory: web
         env:
           NEXTAUTH_SECRET: ci-build-secret
-          API_BASE_URL: http://localhost:8000
+          API_BASE_URL: "http://localhost:8000"
         run: bun run build
 
   e2e:
@@ -71,18 +71,18 @@ jobs:
           --health-timeout 3s --health-retries 10
     env:
       NEXTAUTH_SECRET: ci-e2e-secret
-      DATABASE_URL: postgresql+asyncpg://trading:trading@localhost:5432/trading_dashboard
+      DATABASE_URL: "postgresql+asyncpg://trading:trading@localhost:5432/trading_dashboard"
       DASHBOARD_DATA_DIR: /tmp/ci-e2e-data
-      REDIS_URL: redis://localhost:6379/0
-      API_BASE_URL: http://localhost:8000
-      NEXTAUTH_URL: http://localhost:3000
+      REDIS_URL: "redis://localhost:6379/0"
+      API_BASE_URL: "http://localhost:8000"
+      NEXTAUTH_URL: "http://localhost:3000"
       AUTH_TRUST_HOST: "true"
       E2E_TEST_MODE: "1"
       AUTH_GITHUB_ID: dummy
       AUTH_GITHUB_SECRET: dummy
       AUTH_GOOGLE_ID: dummy
       AUTH_GOOGLE_SECRET: dummy
-      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      PLAYWRIGHT_BASE_URL: "http://localhost:3000"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
