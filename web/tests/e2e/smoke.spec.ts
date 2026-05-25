@@ -1,11 +1,9 @@
 import { test, expect } from "@playwright/test";
+import { signInAs } from "./helpers";
 
 test("sign in via credentials provider and read a seeded run", async ({ page }) => {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await signInAs(page, "e2e-user"); // seeded fixture user; waits for /history
 
-  await expect(page).toHaveURL(/\/history/);
   await expect(page.getByText("NVDA")).toBeVisible();
 
   await page.getByText("NVDA").first().click();
@@ -15,9 +13,7 @@ test("sign in via credentials provider and read a seeded run", async ({ page }) 
 });
 
 test("launch a run and observe queued status on live monitor", async ({ page }) => {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await signInAs(page, "e2e-user"); // waits for /history before navigating
 
   await page.goto("/launch");
   await page.getByRole("textbox", { name: /ticker/i }).fill("TSLA");

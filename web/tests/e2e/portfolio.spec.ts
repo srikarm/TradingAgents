@@ -1,9 +1,8 @@
 import { test, expect } from "@playwright/test";
+import { signInAs } from "./helpers";
 
 test("portfolio page renders headings and metric cards", async ({ page }) => {
-  await page.goto("/api/auth/signin");
-  await page.getByLabel("GitHub ID").fill("e2e-user");
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await signInAs(page, "e2e-user"); // seeded fixture user; waits for /history
 
   await page.goto("/portfolio");
   await expect(page.getByRole("heading", { name: "Portfolio" })).toBeVisible();
